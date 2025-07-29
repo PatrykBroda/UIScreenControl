@@ -1,0 +1,189 @@
+:root {
+}
+
+
+.app {
+    width: 100%;
+    height: 100%;
+    background-color: rgb(20, 20, 20);
+    overflow: hidden;
+}
+
+.connection-status {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.85);
+    padding: 12px 16px;
+    border-radius: 8px;
+    min-width: 180px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.connection-status__text {
+    color: white;
+    font-size: 14px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.connection-status__text--connected { 
+    color: rgb(46, 204, 113); 
+    text-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
+}
+
+.connection-status__text--disconnected { 
+    color: rgb(231, 76, 60); 
+    text-shadow: 0 0 8px rgba(231, 76, 60, 0.5);
+}
+
+.connection-status__text--connecting { 
+    color: rgb(241, 196, 15); 
+    text-shadow: 0 0 8px rgba(241, 196, 15, 0.5);
+}
+
+.screen-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.screen {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: none;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-in-out;
+}
+
+.screen--active {
+    display: flex;
+    opacity: 1;
+}
+
+.screen--blue { 
+    background-color: rgb(52, 152, 219);
+    background-image: linear-gradient(135deg, rgb(52, 152, 219) 0%, rgb(41, 128, 185) 100%);
+}
+
+.screen--green { 
+    background-color: rgb(46, 204, 113);
+    background-image: linear-gradient(135deg, rgb(46, 204, 113) 0%, rgb(39, 174, 96) 100%);
+}
+
+.screen--red { 
+    background-color: rgb(231, 76, 60);
+    background-image: linear-gradient(135deg, rgb(231, 76, 60) 0%, rgb(192, 57, 43) 100%);
+}
+
+.screen--purple { 
+    background-color: rgb(155, 89, 182);
+    background-image: linear-gradient(135deg, rgb(155, 89, 182) 0%, rgb(142, 68, 173) 100%);
+}
+
+.screen__title {
+    color: white;
+    font-size: 64px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+    margin-bottom: 16px;
+    letter-spacing: 2px;
+}
+
+.screen__subtitle {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 32px;
+    -unity-text-align: middle-center;
+    -unity-font-style: normal;
+    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+    margin-bottom: 32px;
+    letter-spacing: 1px;
+}
+
+.screen__content {
+    align-items: center;
+    justify-content: center;
+    max-width: 80%;
+    padding: 24px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+}
+
+.screen__description {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 18px;
+    -unity-text-align: middle-center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    line-height: 24px;
+    white-space: normal;
+    flex-wrap: wrap;
+}
+
+.debug-info {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 8px 12px;
+    border-radius: 6px;
+    opacity: 0.7;
+}
+
+.debug-info__text {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    -unity-text-align: middle-left;
+    -unity-font-style: italic;
+}
+
+/* Root Level Image Container - Always Visible */
+.root-image-container {
+    position: absolute;
+    top: 100px;
+    left: 20px;
+    width: 320px;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    z-index: 100;
+}
+
+/* Image Display Styles */
+.main-image-display {
+    width: 100%;
+    height: 200px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 2px dashed rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    background-size: cover;
+    background-position: center;
+}
+
+.no-image-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.image-info-text {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    margin-top: 5px;
+}

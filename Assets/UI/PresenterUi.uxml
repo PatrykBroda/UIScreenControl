@@ -1,0 +1,14 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:VisualElement name="overlay-container" class="overlay-container">
+        <ui:VisualElement name="top-status" class="top-status">
+            <ui:Label name="status-text" text="Initializing..." class="status-text" />
+            <ui:Label name="current-image-name" text="No image" class="image-name" />
+        </ui:VisualElement>
+        <ui:VisualElement name="bottom-info" class="bottom-info">
+            <ui:Label name="server-url" text="Server: connecting..." class="info-text" />
+            <ui:Label name="user-info" text="User: authenticating..." class="info-text" />
+            <ui:Label name="polling-status" text="Polling: inactive" class="info-text" />
+            <ui:Label name="last-update-time" text="Last Update: never" class="info-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

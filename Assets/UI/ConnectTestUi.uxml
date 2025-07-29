@@ -1,0 +1,48 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/Theme/Presenter.uss?fileID=7433441132597879392&amp;guid=1d7ba195540376646af169b444e4b493&amp;type=3#Presenter" />
+    <ui:VisualElement name="root" class="app">
+        <ui:VisualElement name="connection-status" class="connection-status">
+            <ui:Label name="status-text" text="Status: Disconnected" class="connection-status__text connection-status__text--disconnected" />
+            <ui:Label name="image-status-text" text="Images: Not initialized" class="connection-status__text" />
+        </ui:VisualElement>
+        <ui:VisualElement name="root-image-container" class="root-image-container">
+            <ui:VisualElement name="main-image-display" class="main-image-display">
+                <ui:Label name="no-image-label" text="No image loaded" class="no-image-label" />
+            </ui:VisualElement>
+            <ui:Label name="image-info-text" text="Waiting for server image..." class="image-info-text" />
+        </ui:VisualElement>
+        <ui:VisualElement name="screen-container" class="screen-container">
+            <ui:VisualElement name="screen-1" class="screen screen--blue">
+                <ui:Label text="SCREEN 1" class="screen__title" />
+                <ui:Label text="Welcome" class="screen__subtitle" />
+                <ui:VisualElement class="screen__content">
+                    <ui:Label text="This is the welcome screen. Unity app is ready for remote control." class="screen__description" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="screen-2" class="screen screen--green">
+                <ui:Label text="SCREEN 2" class="screen__title" />
+                <ui:Label text="Information" class="screen__subtitle" />
+                <ui:VisualElement class="screen__content">
+                    <ui:Label text="Information display screen. Show data, stats, or important messages here." class="screen__description" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="screen-3" class="screen screen--red">
+                <ui:Label text="SCREEN 3" class="screen__title" />
+                <ui:Label text="Settings" class="screen__subtitle" />
+                <ui:VisualElement class="screen__content">
+                    <ui:Label text="Settings and configuration screen. Control app behavior remotely." class="screen__description" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="screen-4" class="screen screen--purple">
+                <ui:Label text="SCREEN 4" class="screen__title" />
+                <ui:Label text="Media" class="screen__subtitle" />
+                <ui:VisualElement class="screen__content">
+                    <ui:Label text="This screen used to show images, but now images display at the root level for easy testing." class="screen__description" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="debug-info" class="debug-info">
+            <ui:Label name="debug-text" text="Tap screen to cycle (development mode)" class="debug-info__text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

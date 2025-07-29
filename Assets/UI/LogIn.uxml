@@ -1,0 +1,44 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Theme/Login.uss?fileID=7433441132597879392&amp;guid=f12cff99fe7c76d4d8ecccf725e85c99&amp;type=3#Login" />
+    <ui:VisualElement class="login-container" name="login-container">
+        <ui:VisualElement class="login-panel" name="login-panel">
+            <ui:VisualElement class="login-header" name="login-header">
+                <ui:Label text="Welcome Back" class="login-title" name="login-title" />
+                <ui:Label text="Please sign in to your account" class="login-subtitle" name="login-subtitle" />
+            </ui:VisualElement>
+            
+            <ui:VisualElement name="error-message" class="error-message">
+                <ui:Label text="Invalid username or password. Please try again." name="error-text" />
+            </ui:VisualElement>
+            
+            <ui:VisualElement class="login-form" name="login-form">
+                <ui:VisualElement class="form-group" name="email-group">
+                    <ui:Label text="Email Address" class="form-label" name="email-label" />
+                    <ui:TextField placeholder-text="Enter your email address" name="username-field" class="form-input" />
+                </ui:VisualElement>
+                
+                <ui:VisualElement class="form-group" name="password-group">
+                    <ui:Label text="Password" class="form-label" name="password-label" />
+                    <ui:TextField placeholder-text="Enter your password" password="true" name="password-field" class="form-input" />
+                </ui:VisualElement>
+                
+                <ui:VisualElement class="login-options" name="login-options">
+                    <ui:VisualElement class="checkbox-container" name="checkbox-container">
+                        <ui:Toggle name="remember-toggle" />
+                        <ui:Label text="Remember me" class="checkbox-label" name="remember-label" />
+                    </ui:VisualElement>
+                    <ui:Label text="Forgot password?" name="forgot-password-link" class="forgot-password" />
+                </ui:VisualElement>
+                
+                <ui:Button text="Sign In" name="login-button" class="login-button" />
+            </ui:VisualElement>
+            
+            <ui:VisualElement class="login-footer" name="login-footer">
+                <ui:VisualElement class="signup-text" name="signup-container">
+                    <ui:Label text="Don't have an account? " name="signup-text" />
+                    <ui:Label text="Sign up here" name="signup-link" class="signup-link" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

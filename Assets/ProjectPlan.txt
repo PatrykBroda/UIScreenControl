@@ -1,0 +1,134 @@
+# Unity Android App + Web Control System Plan
+
+## Project Overview
+Build a Unity Android app that displays different screens/content controlled remotely by a website, with multi-user login system.
+
+## Tech Stack Suggestions
+- **Unity**: Android app development
+- **Backend**: Node.js + Express + Socket.io (or ASP.NET Core + SignalR)
+- **Database**: MongoDB or PostgreSQL
+- **Frontend**: React/Vue.js or vanilla HTML/CSS/JS
+- **Real-time Communication**: WebSockets (Socket.io or SignalR)
+- **Authentication**: JWT tokens
+- **Hosting**: Heroku/Railway/Vercel + MongoDB Atlas
+
+## Phase 1: Core Setup (Week 1-2)
+### Backend Foundation
+- [ ] Set up basic Express server with CORS
+- [ ] Create user registration/login endpoints
+- [ ] Set up JWT authentication middleware
+- [ ] Basic database schema for users
+- [ ] Test authentication with Postman
+
+### Unity Basic Setup
+- [ ] Create new Unity project with Android build settings
+- [ ] Set up basic UI system (Canvas, panels for different screens)
+- [ ] Create a simple connection manager script
+- [ ] Test building to Android device
+
+## Phase 2: Real-time Communication (Week 2-3)
+### Backend WebSocket Setup
+- [ ] Add Socket.io to server
+- [ ] Create room system (users can join specific app instances)
+- [ ] Handle screen change events
+- [ ] Add user session management
+
+### Unity WebSocket Integration
+- [ ] Add WebSocket library to Unity (NativeWebSocket or similar)
+- [ ] Create connection manager that connects to server
+- [ ] Handle incoming screen change messages
+- [ ] Create basic screen switching system
+
+### Test Integration
+- [ ] Simple test: website sends "show screen 2" → app switches to screen 2
+
+## Phase 3: User Management & Web Interface (Week 3-4)
+### Web Frontend
+- [ ] Create login/register pages
+- [ ] Build dashboard showing connected apps
+- [ ] Create control panel with screen options
+- [ ] Add real-time status indicators
+
+### Enhanced Backend
+- [ ] Add app registration system (each app gets unique ID)
+- [ ] Implement user permissions (who can control which apps)
+- [ ] Add logging/history of screen changes
+- [ ] Error handling and reconnection logic
+
+## Phase 4: Content Management (Week 4-5)
+### Unity Screen System
+- [ ] Create modular screen system (easy to add new screens)
+- [ ] Add different screen types (image, video, text, interactive)
+- [ ] Implement smooth transitions between screens
+- [ ] Add offline mode (fallback content when disconnected)
+
+### Web Content Management
+- [ ] Upload system for images/videos
+- [ ] Screen template system
+- [ ] Preview functionality
+- [ ] Bulk actions (control multiple apps at once)
+
+## Phase 5: Polish & Deploy (Week 5-6)
+### Stability & Performance
+- [ ] Add reconnection logic for network issues
+- [ ] Optimize Unity build size
+- [ ] Add error logging and monitoring
+- [ ] Performance testing with multiple users
+
+### Deployment
+- [ ] Deploy backend to cloud service
+- [ ] Deploy frontend
+- [ ] Set up SSL certificates
+- [ ] Create APK distribution method
+
+### Documentation
+- [ ] User guide for web interface
+- [ ] Setup instructions for Android app
+- [ ] API documentation
+
+## Quick Start Development Order
+1. **Day 1-2**: Basic Express server + Unity project setup
+2. **Day 3-4**: Get WebSocket communication working (simple ping/pong)
+3. **Day 5-7**: Basic screen switching functionality
+4. **Week 2**: Add authentication and web interface
+5. **Week 3+**: Expand features and polish
+
+## Key Technical Considerations
+
+### Security
+- Use HTTPS/WSS in production
+- Validate all incoming messages
+- Rate limiting on API endpoints
+- Sanitize user inputs
+
+### Scalability
+- Consider using Redis for session storage
+- Design database schema for growth
+- Plan for horizontal scaling if needed
+
+### Unity-Specific Notes
+- Test on multiple Android versions/devices
+- Handle different screen sizes/orientations
+- Plan for app backgrounding/foregrounding
+- Consider using Unity's new Input System
+
+### WebSocket Architecture
+```
+Website → Server → Unity App
+       ↙        ↘
+   User Auth    Screen Data
+   Room Mgmt    Status Updates
+```
+
+## Flexible Development Tips
+- Start with hardcoded screens, make them dynamic later
+- Use simple UI initially, polish later
+- Test early and often on real devices
+- Keep commits small and frequent
+- Don't optimize prematurely - get it working first!
+
+## Emergency Backup Plan
+If WebSockets get complex, start with simple HTTP polling:
+- Unity checks server every 2-3 seconds for updates
+- Less real-time but much simpler to implement
+- Can always upgrade to WebSockets later
