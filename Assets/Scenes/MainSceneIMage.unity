@@ -119,6 +119,55 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &282062657
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 282062659}
+  - component: {fileID: 282062658}
+  m_Layer: 0
+  m_Name: BrightnessController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &282062658
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282062657}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7273f2d0932a92b4ea60ee664de82855, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  serverURL: https://unity-server-control-patrykbroda.replit.app
+  appIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
+  fallbackAppId: unity-app-001
+  loginData: {fileID: 11400000, guid: 1a10f5254827ed441aeabca68b6c2238, type: 2}
+  autoFetchOnStart: 1
+--- !u!4 &282062659
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282062657}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 664.9257, y: 902.9943, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -1094,6 +1143,8 @@ MonoBehaviour:
   canvasRectTransform: {fileID: 2106909377}
   useAnchorStretching: 0
   forceOverrideLayout: 1
+  videoPriority: 1
+  enableMutualExclusionWarnings: 1
   isAnyActive: {fileID: 11400000, guid: f41abd28a5f24184d92022788acc3428, type: 2}
   isImageActive: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
   isVideoActive: {fileID: 11400000, guid: 350ce6d24ba896e4fb00b403c2539304, type: 2}
@@ -1126,3 +1177,4 @@ SceneRoots:
   - {fileID: 1819571886}
   - {fileID: 2119326580}
   - {fileID: 1534361297}
+  - {fileID: 282062659}

@@ -23,6 +23,7 @@ public class LoginController : MonoBehaviour
     private UIDocument uiDocument;
     private VisualElement root;
 
+    private VisualElement loginPanel;
     private TextField usernameField;
     private TextField passwordField;
     private Toggle rememberToggle;
@@ -35,7 +36,7 @@ public class LoginController : MonoBehaviour
     public event Action<string> OnLoginSuccess;
     public event Action<string> OnLoginFailed;
 
-    void Start()
+    void Awake()
     {
         uiDocument = GetComponent<UIDocument>();
         if (uiDocument == null)
@@ -44,6 +45,18 @@ public class LoginController : MonoBehaviour
             return;
         }
 
+        root = uiDocument.rootVisualElement;
+        loginPanel = root.Q<VisualElement>("login-panel");
+
+        // Hide UI until auto login completes
+        if (loginPanel != null)
+            loginPanel.style.display = DisplayStyle.None;
+
+        AutoLogin();
+    }
+
+    void Start()
+    {
         if (loginData == null)
         {
             Debug.LogWarning("UserLoginData ScriptableObject not assigned! Create one using Assets > Create > Authentication > User Login Data");
@@ -51,12 +64,14 @@ public class LoginController : MonoBehaviour
 
         InitializeUI();
         SetupEventHandlers();
+
+        // Show login panel if not auto logging in
+        if (loginPanel != null && loginPanel.style.display != DisplayStyle.Flex)
+            loginPanel.style.display = DisplayStyle.Flex;
     }
 
     void InitializeUI()
     {
-        root = uiDocument.rootVisualElement;
-
         usernameField = root.Q<TextField>("username-field");
         passwordField = root.Q<TextField>("password-field");
         rememberToggle = root.Q<Toggle>("remember-toggle");
@@ -88,6 +103,78 @@ public class LoginController : MonoBehaviour
 
         if (passwordField != null)
             passwordField.RegisterCallback<KeyDownEvent>(OnFieldKeyDown);
+    }
+
+    // AUTO LOGIN LOGIC
+    void AutoLogin()
+    {
+        string token = PlayerPrefs.GetString("auth_token", "");
+        string rememberedUsername = PlayerPrefs.GetString("remembered_username", "");
+        bool hasRememberMe = !string.IsNullOrEmpty(rememberedUsername);
+
+        if (hasRememberMe && !string.IsNullOrEmpty(token))
+        {
+            // Hide UI while attempting auto login
+            if (loginPanel != null)
+                loginPanel.style.display = DisplayStyle.None;
+
+            StartCoroutine(ValidateTokenAndLogin(token));
+        }
+        else
+        {
+            // Show login form if auto login not possible
+            if (loginPanel != null)
+                loginPanel.style.display = DisplayStyle.Flex;
+        }
+    }
+
+    IEnumerator ValidateTokenAndLogin(string token)
+    {
+        SetLoadingState(true);
+        string fullUrl = baseUrl + validateEndpoint;
+        using (UnityWebRequest request = UnityWebRequest.Get(fullUrl))
+        {
+            request.SetRequestHeader("Authorization", "Bearer " + token);
+
+            yield return request.SendWebRequest();
+
+            SetLoadingState(false);
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                TokenValidationResponse response = JsonUtility.FromJson<TokenValidationResponse>(request.downloadHandler.text);
+
+                if (response.success && response.user != null)
+                {
+                    // Restore login data and proceed
+                    if (loginData != null)
+                    {
+                        loginData.SetAuthToken(token);
+                        loginData.SetUserAccountData(response.user);
+                        loginData.SetLoginCredentials(response.user.email, response.user.email, true);
+                    }
+                    Debug.Log("Auto login successful!");
+                    OnLoginSuccess?.Invoke(token);
+
+                    if (autoLoadSceneOnLogin)
+                    {
+                        LoadMainScene();
+                    }
+                    yield break; // Stop further execution
+                }
+            }
+
+            // If validation fails, clear stored token/username and show login form
+            PlayerPrefs.DeleteKey("auth_token");
+            PlayerPrefs.DeleteKey("remembered_username");
+            PlayerPrefs.Save();
+
+            Debug.Log("Auto login failed, returning to login screen.");
+
+            // Show login form
+            if (loginPanel != null)
+                loginPanel.style.display = DisplayStyle.Flex;
+        }
     }
 
     void OnFieldKeyDown(KeyDownEvent evt)
@@ -454,6 +541,10 @@ public class LoginController : MonoBehaviour
         PlayerPrefs.Save();
         ClearForm();
         HideError();
+
+        // Show login form after logout
+        if (loginPanel != null)
+            loginPanel.style.display = DisplayStyle.Flex;
     }
 
     public UnityWebRequest CreateAuthenticatedRequest(string endpoint, string method = "GET", string jsonData = null)
@@ -522,6 +613,8 @@ public class LoginController : MonoBehaviour
         }
     }
 }
+
+// --- DATA CLASSES ---
 
 [System.Serializable]
 public class LoginRequestData

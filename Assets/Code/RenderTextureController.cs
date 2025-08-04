@@ -4,6 +4,7 @@ using UnityAtoms.BaseAtoms;
 /// <summary>
 /// Controls render texture GameObjects based on Atom bool variables.
 /// Automatically fits render textures to canvas size with no empty space.
+/// Ensures mutual exclusion between image and video render textures.
 /// </summary>
 public class RenderTextureController : MonoBehaviour
 {
@@ -19,6 +20,10 @@ public class RenderTextureController : MonoBehaviour
     [SerializeField] private bool useAnchorStretching = false;
     [SerializeField] private bool forceOverrideLayout = true;
 
+    [Header("Mutual Exclusion Settings")]
+    [SerializeField] private bool videoPriority = true; // If true, video takes priority over image when both try to activate
+    [SerializeField] private bool enableMutualExclusionWarnings = true;
+
     [Header("Atom Bool Variables")]
     [SerializeField] private BoolVariable isAnyActive;
     [SerializeField] private BoolVariable isImageActive;
@@ -28,6 +33,10 @@ public class RenderTextureController : MonoBehaviour
     [SerializeField] private BoolReference isAnyActiveRef;
     [SerializeField] private BoolReference isImageActiveRef;
     [SerializeField] private BoolReference isVideoActiveRef;
+
+    // Track the last active state to help with conflict resolution
+    private bool lastVideoState = false;
+    private bool lastImageState = false;
 
     private void Start()
     {
@@ -40,6 +49,10 @@ public class RenderTextureController : MonoBehaviour
 
         if (isVideoActive != null)
             isVideoActive.Changed.Register(OnVideoActiveChanged);
+
+        // Initialize last states
+        lastVideoState = GetBoolValue(isVideoActive, isVideoActiveRef);
+        lastImageState = GetBoolValue(isImageActive, isImageActiveRef);
 
         // Initial setup
         UpdateRenderTextures();
@@ -65,12 +78,86 @@ public class RenderTextureController : MonoBehaviour
 
     private void OnImageActiveChanged(bool value)
     {
+        if (value && !lastImageState) // Image is being activated
+        {
+            HandleImageActivation();
+        }
+        lastImageState = value;
         UpdateRenderTextures();
     }
 
     private void OnVideoActiveChanged(bool value)
     {
+        if (value && !lastVideoState) // Video is being activated
+        {
+            HandleVideoActivation();
+        }
+        lastVideoState = value;
         UpdateRenderTextures();
+    }
+
+    private void HandleImageActivation()
+    {
+        bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
+
+        if (videoActive)
+        {
+            if (enableMutualExclusionWarnings)
+            {
+                Debug.LogWarning("[RenderTextureController] Conflict detected: Both image and video render textures are trying to be active simultaneously!");
+            }
+
+            if (videoPriority)
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] Video has priority - deactivating image render texture.");
+                }
+                // Deactivate image
+                SetImageActiveInternal(false);
+            }
+            else
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] Image has priority - deactivating video render texture.");
+                }
+                // Deactivate video
+                SetVideoActiveInternal(false);
+            }
+        }
+    }
+
+    private void HandleVideoActivation()
+    {
+        bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
+
+        if (imageActive)
+        {
+            if (enableMutualExclusionWarnings)
+            {
+                Debug.LogWarning("[RenderTextureController] Conflict detected: Both image and video render textures are trying to be active simultaneously!");
+            }
+
+            if (videoPriority)
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] Video has priority - deactivating image render texture.");
+                }
+                // Deactivate image
+                SetImageActiveInternal(false);
+            }
+            else
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] Image has priority - deactivating video render texture.");
+                }
+                // Deactivate video
+                SetVideoActiveInternal(false);
+            }
+        }
     }
 
     private void UpdateRenderTextures()
@@ -78,6 +165,26 @@ public class RenderTextureController : MonoBehaviour
         bool anyActive = GetBoolValue(isAnyActive, isAnyActiveRef);
         bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
         bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
+
+        // Check for mutual exclusion violation and resolve it
+        if (imageActive && videoActive)
+        {
+            if (enableMutualExclusionWarnings)
+            {
+                Debug.LogWarning("[RenderTextureController] Mutual exclusion violation detected during update - resolving based on priority.");
+            }
+
+            if (videoPriority)
+            {
+                imageActive = false;
+                SetImageActiveInternal(false);
+            }
+            else
+            {
+                videoActive = false;
+                SetVideoActiveInternal(false);
+            }
+        }
 
         // Only activate render textures if something is active
         if (!anyActive)
@@ -114,6 +221,35 @@ public class RenderTextureController : MonoBehaviour
         if (obj != null && obj.activeSelf != active)
         {
             obj.SetActive(active);
+        }
+    }
+
+    // Internal methods to set values without triggering mutual exclusion checks
+    private void SetVideoActiveInternal(bool active)
+    {
+        if (isVideoActive != null)
+        {
+            lastVideoState = active;
+            isVideoActive.Value = active;
+        }
+        else if (isVideoActiveRef != null)
+        {
+            lastVideoState = active;
+            isVideoActiveRef.Value = active;
+        }
+    }
+
+    private void SetImageActiveInternal(bool active)
+    {
+        if (isImageActive != null)
+        {
+            lastImageState = active;
+            isImageActive.Value = active;
+        }
+        else if (isImageActiveRef != null)
+        {
+            lastImageState = active;
+            isImageActiveRef.Value = active;
         }
     }
 
@@ -332,21 +468,43 @@ public class RenderTextureController : MonoBehaviour
         return new Vector2(Screen.width, Screen.height);
     }
 
-    // Public methods for manual control if needed
+    // Public methods for manual control with mutual exclusion
     public void SetVideoActive(bool active)
     {
-        if (isVideoActive != null)
-            isVideoActive.Value = active;
-        else if (isVideoActiveRef != null)
-            isVideoActiveRef.Value = active;
+        if (active)
+        {
+            // Check if image is currently active and handle conflict
+            bool imageCurrentlyActive = GetBoolValue(isImageActive, isImageActiveRef);
+            if (imageCurrentlyActive)
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] SetVideoActive(true) called while image is active - deactivating image due to mutual exclusion.");
+                }
+                SetImageActiveInternal(false);
+            }
+        }
+
+        SetVideoActiveInternal(active);
     }
 
     public void SetImageActive(bool active)
     {
-        if (isImageActive != null)
-            isImageActive.Value = active;
-        else if (isImageActiveRef != null)
-            isImageActiveRef.Value = active;
+        if (active)
+        {
+            // Check if video is currently active and handle conflict
+            bool videoCurrentlyActive = GetBoolValue(isVideoActive, isVideoActiveRef);
+            if (videoCurrentlyActive)
+            {
+                if (enableMutualExclusionWarnings)
+                {
+                    Debug.LogWarning("[RenderTextureController] SetImageActive(true) called while video is active - deactivating video due to mutual exclusion.");
+                }
+                SetVideoActiveInternal(false);
+            }
+        }
+
+        SetImageActiveInternal(active);
     }
 
     public void SetAnyActive(bool active)
@@ -355,6 +513,34 @@ public class RenderTextureController : MonoBehaviour
             isAnyActive.Value = active;
         else if (isAnyActiveRef != null)
             isAnyActiveRef.Value = active;
+    }
+
+    // Method to toggle between video and image (safe way to switch)
+    public void SwitchToVideo()
+    {
+        if (enableMutualExclusionWarnings)
+        {
+            Debug.Log("[RenderTextureController] Switching to video render texture.");
+        }
+        SetImageActiveInternal(false);
+        SetVideoActiveInternal(true);
+    }
+
+    public void SwitchToImage()
+    {
+        if (enableMutualExclusionWarnings)
+        {
+            Debug.Log("[RenderTextureController] Switching to image render texture.");
+        }
+        SetVideoActiveInternal(false);
+        SetImageActiveInternal(true);
+    }
+
+    // Method to deactivate both
+    public void DeactivateBoth()
+    {
+        SetVideoActiveInternal(false);
+        SetImageActiveInternal(false);
     }
 
     // Method to update render textures manually if needed
@@ -395,14 +581,41 @@ public class RenderTextureController : MonoBehaviour
         FitRenderTexturesToCanvas();
     }
 
+    // Toggle priority system
+    public void SetVideoPriority(bool priority)
+    {
+        videoPriority = priority;
+        if (enableMutualExclusionWarnings)
+        {
+            Debug.Log($"[RenderTextureController] Video priority set to: {priority}");
+        }
+    }
+
+    // Enable/disable warnings
+    public void SetWarningsEnabled(bool enabled)
+    {
+        enableMutualExclusionWarnings = enabled;
+    }
+
     // Debug method to check current state
     [ContextMenu("Debug Current State")]
     public void DebugCurrentState()
     {
         Vector2 canvasSize = GetCanvasSize();
+        bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
+        bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
+
         Debug.Log($"Canvas Size: {canvasSize}");
         Debug.Log($"Use Anchor Stretching: {useAnchorStretching}");
         Debug.Log($"Force Override Layout: {forceOverrideLayout}");
+        Debug.Log($"Video Priority: {videoPriority}");
+        Debug.Log($"Warnings Enabled: {enableMutualExclusionWarnings}");
+        Debug.Log($"Current States - Video: {videoActive}, Image: {imageActive}");
+
+        if (videoActive && imageActive)
+        {
+            Debug.LogError("[RenderTextureController] CONFLICT: Both video and image are currently active!");
+        }
 
         if (videoRenderTextureObject != null)
         {
