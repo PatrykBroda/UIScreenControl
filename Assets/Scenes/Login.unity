@@ -484,6 +484,7 @@ GameObject:
   - component: {fileID: 1087598038}
   - component: {fileID: 1087598041}
   - component: {fileID: 1087598042}
+  - component: {fileID: 1087598043}
   m_Layer: 5
   m_Name: UI
   m_TagString: Untagged
@@ -547,7 +548,20 @@ MonoBehaviour:
   validateEndpoint: /api/auth/unity/me
   loginData: {fileID: 11400000, guid: 1a10f5254827ed441aeabca68b6c2238, type: 2}
   mainSceneName: MainSceneIMage
-  autoLoadSceneOnLogin: 0
+  autoLoadSceneOnLogin: 1
+  autoPopulateCredentials: 1
+--- !u!114 &1087598043
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1087598037}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f860646860d274a4db96d495d2d99340, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1707256822
 GameObject:
   m_ObjectHideFlags: 0
