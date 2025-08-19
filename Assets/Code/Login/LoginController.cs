@@ -20,6 +20,9 @@ public class LoginController : MonoBehaviour
     [SerializeField] private string mainSceneName = "MainSceneIMage";
     [SerializeField] private bool autoLoadSceneOnLogin = true;
 
+    [Header("Auto Login Settings")]
+    [SerializeField] private bool autoPopulateCredentials = true; // New setting to control auto-population
+
     private UIDocument uiDocument;
     private VisualElement root;
 
@@ -32,6 +35,10 @@ public class LoginController : MonoBehaviour
     private Label signupLink;
     private VisualElement errorMessage;
     private Label errorText;
+
+    // Store credentials for auto-population
+    private string rememberedEmail = "";
+    private string rememberedPassword = "";
 
     public event Action<string> OnLoginSuccess;
     public event Action<string> OnLoginFailed;
@@ -48,11 +55,12 @@ public class LoginController : MonoBehaviour
         root = uiDocument.rootVisualElement;
         loginPanel = root.Q<VisualElement>("login-panel");
 
-        // Hide UI until auto login completes
+        // Always show the login panel now
         if (loginPanel != null)
-            loginPanel.style.display = DisplayStyle.None;
+            loginPanel.style.display = DisplayStyle.Flex;
 
-        AutoLogin();
+        // Check for stored credentials for auto-population
+        CheckStoredCredentials();
     }
 
     void Start()
@@ -65,9 +73,11 @@ public class LoginController : MonoBehaviour
         InitializeUI();
         SetupEventHandlers();
 
-        // Show login panel if not auto logging in
-        if (loginPanel != null && loginPanel.style.display != DisplayStyle.Flex)
-            loginPanel.style.display = DisplayStyle.Flex;
+        // Auto-populate fields if we have stored credentials
+        if (autoPopulateCredentials)
+        {
+            PopulateStoredCredentials();
+        }
     }
 
     void InitializeUI()
@@ -105,32 +115,28 @@ public class LoginController : MonoBehaviour
             passwordField.RegisterCallback<KeyDownEvent>(OnFieldKeyDown);
     }
 
-    // AUTO LOGIN LOGIC
-    void AutoLogin()
+    // MODIFIED AUTO LOGIN LOGIC - Now checks and stores credentials for population
+    void CheckStoredCredentials()
     {
         string token = PlayerPrefs.GetString("auth_token", "");
         string rememberedUsername = PlayerPrefs.GetString("remembered_username", "");
+        string rememberedPass = PlayerPrefs.GetString("remembered_password", ""); // Store password if needed
         bool hasRememberMe = !string.IsNullOrEmpty(rememberedUsername);
 
         if (hasRememberMe && !string.IsNullOrEmpty(token))
         {
-            // Hide UI while attempting auto login
-            if (loginPanel != null)
-                loginPanel.style.display = DisplayStyle.None;
-
-            StartCoroutine(ValidateTokenAndLogin(token));
+            // Validate the token first to see if we should auto-populate
+            StartCoroutine(ValidateTokenForAutoPopulation(token, rememberedUsername));
         }
-        else
+        else if (hasRememberMe)
         {
-            // Show login form if auto login not possible
-            if (loginPanel != null)
-                loginPanel.style.display = DisplayStyle.Flex;
+            // We have a remembered username but no valid token
+            rememberedEmail = rememberedUsername;
         }
     }
 
-    IEnumerator ValidateTokenAndLogin(string token)
+    IEnumerator ValidateTokenForAutoPopulation(string token, string email)
     {
-        SetLoadingState(true);
         string fullUrl = baseUrl + validateEndpoint;
         using (UnityWebRequest request = UnityWebRequest.Get(fullUrl))
         {
@@ -138,43 +144,56 @@ public class LoginController : MonoBehaviour
 
             yield return request.SendWebRequest();
 
-            SetLoadingState(false);
-
             if (request.result == UnityWebRequest.Result.Success)
             {
                 TokenValidationResponse response = JsonUtility.FromJson<TokenValidationResponse>(request.downloadHandler.text);
 
                 if (response.success && response.user != null)
                 {
-                    // Restore login data and proceed
-                    if (loginData != null)
-                    {
-                        loginData.SetAuthToken(token);
-                        loginData.SetUserAccountData(response.user);
-                        loginData.SetLoginCredentials(response.user.email, response.user.email, true);
-                    }
-                    Debug.Log("Auto login successful!");
-                    OnLoginSuccess?.Invoke(token);
+                    // Token is valid, store credentials for auto-population
+                    rememberedEmail = email;
 
-                    if (autoLoadSceneOnLogin)
+                    // If you want to also populate the password, you'll need to store it securely
+                    // Note: Storing passwords in PlayerPrefs is not recommended for production
+                    // Consider using a more secure method or just populate the email
+
+                    Debug.Log("Valid token found - credentials will be auto-populated");
+
+                    // Populate the fields if UI is ready
+                    if (usernameField != null && passwordField != null)
                     {
-                        LoadMainScene();
+                        PopulateStoredCredentials();
                     }
-                    yield break; // Stop further execution
+
+                    yield break;
                 }
             }
 
-            // If validation fails, clear stored token/username and show login form
+            // If validation fails, clear stored token but keep username for population
             PlayerPrefs.DeleteKey("auth_token");
-            PlayerPrefs.DeleteKey("remembered_username");
             PlayerPrefs.Save();
 
-            Debug.Log("Auto login failed, returning to login screen.");
-
-            // Show login form
-            if (loginPanel != null)
-                loginPanel.style.display = DisplayStyle.Flex;
+            rememberedEmail = email; // Still populate the email field
+            Debug.Log("Token invalid but email will be populated");
         }
+    }
+
+    void PopulateStoredCredentials()
+    {
+        if (!string.IsNullOrEmpty(rememberedEmail) && usernameField != null)
+        {
+            usernameField.value = rememberedEmail;
+            rememberToggle.value = true;
+
+            // Focus the password field since email is already filled
+            passwordField?.Focus();
+        }
+
+        // If you choose to store and populate password (not recommended for production)
+        // if (!string.IsNullOrEmpty(rememberedPassword) && passwordField != null)
+        // {
+        //     passwordField.value = rememberedPassword;
+        // }
     }
 
     void OnFieldKeyDown(KeyDownEvent evt)
@@ -327,10 +346,14 @@ public class LoginController : MonoBehaviour
         if (rememberMe && !string.IsNullOrEmpty(usernameField.value))
         {
             PlayerPrefs.SetString("remembered_username", usernameField.value);
+
+            // Optionally store password (NOT recommended for production)
+            // PlayerPrefs.SetString("remembered_password", passwordField.value);
         }
         else
         {
             PlayerPrefs.DeleteKey("remembered_username");
+            PlayerPrefs.DeleteKey("remembered_password");
         }
 
         PlayerPrefs.Save();

@@ -547,7 +547,7 @@ MonoBehaviour:
   validateEndpoint: /api/auth/unity/me
   loginData: {fileID: 11400000, guid: 1a10f5254827ed441aeabca68b6c2238, type: 2}
   mainSceneName: MainSceneIMage
-  autoLoadSceneOnLogin: 1
+  autoLoadSceneOnLogin: 0
 --- !u!1 &1707256822
 GameObject:
   m_ObjectHideFlags: 0

@@ -26,12 +26,12 @@
     flex-direction: column;
 }
 
-/* Main Panel */
+/* Main Panel - Responsive */
 .login-panel {
     background-color: var(--surface-color);
     border-radius: 20px;
     padding: 40px 30px;
-    width: 100%;
+    width: 90%;
     max-width: 480px;
     min-width: 280px;
     border-width: 1px;
@@ -134,24 +134,6 @@
     background-color: var(--text-muted);
 }
 
-.secondary-button {
-    height: 50px;
-    border-radius: 10px;
-    background-color: transparent;
-    border-width: 1px;
-    border-color: var(--border-color);
-    color: var(--text-secondary);
-    font-size: 16px;
-    transition-duration: 0.2s;
-    min-width: 0;
-    width: 100%;
-}
-
-.secondary-button:hover {
-    background-color: var(--background-color);
-    border-color: var(--text-secondary);
-}
-
 /* Options Section */
 .login-options {
     flex-direction: column;
@@ -232,169 +214,533 @@
     display: flex;
 }
 
-/* Mobile Responsive Classes - Applied programmatically */
-.mobile-optimization {
+/* Responsive Classes for Different Screen Sizes */
+
+/* Small Mobile (320px - 480px) */
+.mobile-small {
+    width: 95%;
+    max-width: 350px;
     padding: 20px 16px;
 }
 
-.mobile-title {
-    font-size: 28px;
+.mobile-small .login-title {
+    font-size: 24px;
     margin-bottom: 8px;
 }
 
-.mobile-subtitle {
+.mobile-small .login-subtitle {
     font-size: 14px;
 }
 
-.mobile-form-group {
+.mobile-small .login-header {
+    margin-bottom: 25px;
+}
+
+.mobile-small .form-group {
     margin-bottom: 20px;
 }
 
-.mobile-form-label {
+.mobile-small .form-label {
     font-size: 14px;
     margin-bottom: 6px;
 }
 
-.mobile-form-input {
-    height: 48px;
+.mobile-small .form-input {
+    height: 44px;
     font-size: 16px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 8px;
+}
+
+.mobile-small .login-button {
+    height: 44px;
+    font-size: 16px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
+.mobile-small .login-options {
+    margin-bottom: 20px;
+}
+
+.mobile-small .checkbox-label {
+    font-size: 13px;
+    margin-left: 6px;
+}
+
+.mobile-small .forgot-password {
+    font-size: 13px;
+}
+
+.mobile-small .login-footer {
+    padding-top: 20px;
+}
+
+.mobile-small .signup-text {
+    font-size: 13px;
+}
+
+.mobile-small .error-message {
+    padding: 12px;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+/* Medium Mobile (481px - 768px) */
+.mobile-medium {
+    width: 85%;
+    max-width: 400px;
+    padding: 30px 20px;
+}
+
+.mobile-medium .login-title {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+.mobile-medium .login-subtitle {
+    font-size: 15px;
+}
+
+.mobile-medium .form-input {
+    height: 46px;
     padding-left: 14px;
     padding-right: 14px;
 }
 
-.mobile-button {
+.mobile-medium .login-button {
+    height: 46px;
+}
+
+.mobile-medium .checkbox-label {
+    margin-left: 7px;
+}
+
+/* Tablet (769px - 1024px) */
+.tablet {
+    width: 70%;
+    max-width: 450px;
+    padding: 35px 25px;
+}
+
+.tablet .login-title {
+    font-size: 30px;
+}
+
+.tablet .form-input {
     height: 48px;
-    font-size: 16px;
-    margin-bottom: 20px;
+    padding-left: 15px;
+    padding-right: 15px;
 }
 
-.mobile-options {
-    margin-bottom: 20px;
+.tablet .login-button {
+    height: 48px;
 }
 
-.mobile-checkbox-label {
-    font-size: 13px;
+/* Desktop Small (1025px - 1366px) */
+.desktop-small {
+    width: 60%;
+    max-width: 480px;
+    padding: 40px 30px;
 }
 
-.mobile-forgot-password {
-    font-size: 13px;
-    margin-top: 8px;
+.desktop-small .login-title {
+    font-size: 32px;
+    margin-bottom: 12px;
 }
 
-.mobile-footer {
-    padding-top: 20px;
-}
-
-.mobile-signup-text {
-    font-size: 13px;
-}
-
-/* Extra Small Screen Classes */
-.xs-container {
-    padding: 10px;
-}
-
-.xs-panel {
-    border-radius: 16px;
-    padding: 24px 16px;
-    margin: 0;
-}
-
-.xs-title {
-    font-size: 24px;
-}
-
-.xs-subtitle {
-    font-size: 13px;
-}
-
-.xs-header {
-    margin-bottom: 30px;
-}
-
-.xs-form {
-    margin-bottom: 20px;
-}
-
-.xs-form-group {
-    margin-bottom: 18px;
-}
-
-.xs-button {
-    height: 44px;
-    font-size: 15px;
-}
-
-.xs-input {
-    height: 44px;
+.desktop-small .login-subtitle {
     font-size: 16px;
 }
 
-/* Large Screen Optimizations */
-.desktop-panel {
+.desktop-small .form-input {
+    height: 50px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.desktop-small .login-button {
+    height: 50px;
+}
+
+.desktop-small .login-options {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.desktop-small .checkbox-container {
+    margin-bottom: 0;
+}
+
+.desktop-small .forgot-password {
+    margin-top: 0;
+}
+
+/* Desktop Large (1367px+) */
+.desktop-large {
+    width: 50%;
     max-width: 520px;
+    min-width: 400px;
     padding: 50px 40px;
 }
 
-.desktop-title {
+.desktop-large .login-title {
     font-size: 36px;
     margin-bottom: 16px;
 }
 
-.desktop-subtitle {
+.desktop-large .login-subtitle {
     font-size: 18px;
 }
 
-.desktop-header {
+.desktop-large .login-header {
     margin-bottom: 50px;
 }
 
-.desktop-form-group {
+.desktop-large .form-group {
     margin-bottom: 30px;
 }
 
-.desktop-form-label {
+.desktop-large .form-label {
     font-size: 18px;
     margin-bottom: 10px;
 }
 
-.desktop-form-input {
+.desktop-large .form-input {
     height: 56px;
     font-size: 18px;
     padding-left: 20px;
     padding-right: 20px;
+    border-radius: 12px;
 }
 
-.desktop-button {
+.desktop-large .login-button {
     height: 56px;
     font-size: 18px;
     margin-bottom: 30px;
+    border-radius: 12px;
 }
 
-.desktop-options {
+.desktop-large .login-options {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
 }
 
-.desktop-checkbox-container {
+.desktop-large .checkbox-container {
     margin-bottom: 0;
 }
 
-.desktop-checkbox-label {
+.desktop-large .checkbox-label {
     font-size: 16px;
 }
 
-.desktop-forgot-password {
+.desktop-large .forgot-password {
     font-size: 16px;
     margin-top: 0;
 }
 
-.desktop-footer {
+.desktop-large .login-footer {
     padding-top: 30px;
 }
 
-.desktop-signup-text {
+.desktop-large .signup-text {
     font-size: 16px;
+}
+
+.desktop-large .error-message {
+    padding: 20px;
+    margin-bottom: 30px;
+    font-size: 16px;
+    border-radius: 12px;
+}
+
+/* Landscape specific adjustments */
+.landscape {
+    max-height: 95%;
+    padding: 20px 25px;
+}
+
+.landscape .login-header {
+    margin-bottom: 15px;
+}
+
+.landscape .login-title {
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+
+.landscape .login-subtitle {
+    font-size: 14px;
+}
+
+.landscape .form-group {
+    margin-bottom: 12px;
+}
+
+.landscape .form-input {
+    height: 40px;
+    font-size: 14px;
+}
+
+.landscape .form-label {
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.landscape .login-options {
+    margin-bottom: 12px;
+}
+
+.landscape .login-footer {
+    padding-top: 12px;
+}
+
+.landscape .login-button {
+    height: 40px;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.landscape .checkbox-label {
+    font-size: 12px;
+}
+
+.landscape .forgot-password {
+    font-size: 12px;
+}
+
+.landscape .signup-text {
+    font-size: 12px;
+}
+
+.landscape .error-message {
+    padding: 10px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+/* Small landscape screens (like 800x480) - Ultra compact */
+.mobile-small.landscape {
+    padding: 8px 15px;
+    max-height: 100%;
+    width: 95%;
+}
+
+.mobile-small.landscape .login-header {
+    margin-bottom: 5px;
+}
+
+.mobile-small.landscape .login-title {
+    font-size: 18px;
+    margin-bottom: 2px;
+}
+
+.mobile-small.landscape .login-subtitle {
+    font-size: 10px;
+}
+
+.mobile-small.landscape .form-group {
+    margin-bottom: 5px;
+}
+
+.mobile-small.landscape .form-input {
+    height: 32px;
+    font-size: 12px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 6px;
+}
+
+.mobile-small.landscape .form-label {
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.mobile-small.landscape .login-button {
+    height: 32px;
+    font-size: 12px;
+    margin-bottom: 5px;
+    border-radius: 6px;
+}
+
+.mobile-small.landscape .login-options {
+    margin-bottom: 5px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mobile-small.landscape .checkbox-container {
+    margin-bottom: 0;
+}
+
+.mobile-small.landscape .login-footer {
+    padding-top: 5px;
+}
+
+.mobile-small.landscape .checkbox-label {
+    font-size: 10px;
+    margin-left: 3px;
+}
+
+.mobile-small.landscape .forgot-password {
+    font-size: 10px;
+    margin-top: 0;
+}
+
+.mobile-small.landscape .signup-text {
+    font-size: 10px;
+}
+
+.mobile-small.landscape .error-message {
+    padding: 5px;
+    margin-bottom: 5px;
+    font-size: 10px;
+    border-radius: 6px;
+}
+
+/* Medium landscape screens */
+.mobile-medium.landscape {
+    padding: 12px 18px;
+    max-height: 98%;
+}
+
+.mobile-medium.landscape .login-header {
+    margin-bottom: 8px;
+}
+
+.mobile-medium.landscape .login-title {
+    font-size: 20px;
+    margin-bottom: 3px;
+}
+
+.mobile-medium.landscape .login-subtitle {
+    font-size: 11px;
+}
+
+.mobile-medium.landscape .form-group {
+    margin-bottom: 6px;
+}
+
+.mobile-medium.landscape .form-input {
+    height: 34px;
+    font-size: 13px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.mobile-medium.landscape .form-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.mobile-medium.landscape .login-button {
+    height: 34px;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.mobile-medium.landscape .login-options {
+    margin-bottom: 6px;
+}
+
+.mobile-medium.landscape .login-footer {
+    padding-top: 6px;
+}
+
+.mobile-medium.landscape .checkbox-label {
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.mobile-medium.landscape .forgot-password {
+    font-size: 11px;
+}
+
+.mobile-medium.landscape .signup-text {
+    font-size: 11px;
+}
+
+.mobile-medium.landscape .error-message {
+    padding: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+}
+
+/* Tablet landscape adjustments */
+.tablet.landscape {
+    padding: 25px 30px;
+}
+
+.tablet.landscape .login-title {
+    font-size: 26px;
+}
+
+.tablet.landscape .form-input {
+    height: 42px;
+}
+
+.tablet.landscape .login-button {
+    height: 42px;
+}
+
+/* Portrait specific adjustments */
+.portrait .login-container {
+    justify-content: flex-start;
+    padding-top: 5%;
+}
+
+.portrait .login-panel {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* Ultra-wide desktop */
+.ultra-wide {
+    width: 40%;
+    max-width: 600px;
+    padding: 60px 50px;
+}
+
+.ultra-wide .login-title {
+    font-size: 40px;
+    margin-bottom: 20px;
+}
+
+.ultra-wide .login-subtitle {
+    font-size: 20px;
+}
+
+.ultra-wide .form-input {
+    height: 60px;
+    font-size: 20px;
+    padding-left: 24px;
+    padding-right: 24px;
+    border-radius: 14px;
+}
+
+.ultra-wide .login-button {
+    height: 60px;
+    font-size: 20px;
+    border-radius: 14px;
+}
+
+.ultra-wide .form-label {
+    font-size: 20px;
+}
+
+.ultra-wide .checkbox-label {
+    font-size: 18px;
+}
+
+.ultra-wide .forgot-password {
+    font-size: 18px;
+}
+
+.ultra-wide .signup-text {
+    font-size: 18px;
 }
