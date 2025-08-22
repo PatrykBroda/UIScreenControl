@@ -5,6 +5,7 @@ using UnityAtoms.BaseAtoms;
 /// Controls render texture GameObjects based on Atom bool variables.
 /// Automatically fits render textures to canvas size with no empty space.
 /// Ensures mutual exclusion between image and video render textures.
+/// Maintains stable state - once active, stays active until replaced by other media.
 /// </summary>
 public class RenderTextureController : MonoBehaviour
 {
@@ -20,200 +21,434 @@ public class RenderTextureController : MonoBehaviour
     [SerializeField] private bool useAnchorStretching = false;
     [SerializeField] private bool forceOverrideLayout = true;
 
-    [Header("Mutual Exclusion Settings")]
+    [Header("State Management")]
     [SerializeField] private bool videoPriority = true; // If true, video takes priority over image when both try to activate
-    [SerializeField] private bool enableMutualExclusionWarnings = true;
+    [SerializeField] private bool enableDebugLogs = true;
+    [SerializeField] private bool maintainLastActiveState = true; // Keep last active state when API reports no media
 
-    [Header("Atom Bool Variables")]
-    [SerializeField] private BoolVariable isAnyActive;
-    [SerializeField] private BoolVariable isImageActive;
-    [SerializeField] private BoolVariable isVideoActive;
+    [Header("API Status Variables (READ ONLY)")]
+    [SerializeField] private BoolVariable apiHasImageVariable; // From API - don't modify
+    [SerializeField] private BoolVariable apiHasVideoVariable; // From API - don't modify
+    [SerializeField] private BoolVariable apiHasAnyMediaVariable; // From API - don't modify
 
-    [Header("Optional: Atom Bool References")]
-    [SerializeField] private BoolReference isAnyActiveRef;
-    [SerializeField] private BoolReference isImageActiveRef;
-    [SerializeField] private BoolReference isVideoActiveRef;
+    [Header("Display Control Variables (CONTROLLED BY THIS SCRIPT)")]
+    [SerializeField] private BoolVariable displayImageActive; // Controls actual image display
+    [SerializeField] private BoolVariable displayVideoActive; // Controls actual video display
+    [SerializeField] private BoolVariable displayAnyActive; // Controls any display
 
-    // Track the last active state to help with conflict resolution
-    private bool lastVideoState = false;
-    private bool lastImageState = false;
+    // Internal state tracking
+    private bool currentImageDisplayState = false;
+    private bool currentVideoDisplayState = false;
+    private bool hasInitialized = false;
+
+    // Track what was last requested to be active (for maintaining state)
+    private bool lastRequestedImageState = false;
+    private bool lastRequestedVideoState = false;
+
+    // Debouncing to prevent rapid state changes
+    private float lastStateChangeTime = 0f;
+    private const float STATE_CHANGE_DEBOUNCE = 0.1f;
 
     private void Start()
     {
-        // Subscribe to atom bool variable changes
-        if (isAnyActive != null)
-            isAnyActive.Changed.Register(OnAnyActiveChanged);
+        InitializeController();
+    }
 
-        if (isImageActive != null)
-            isImageActive.Changed.Register(OnImageActiveChanged);
+    private void InitializeController()
+    {
+        DebugLog("Initializing RenderTextureController...");
 
-        if (isVideoActive != null)
-            isVideoActive.Changed.Register(OnVideoActiveChanged);
+        // Subscribe to API status changes (READ ONLY - we only listen, never modify these)
+        if (apiHasImageVariable != null)
+        {
+            apiHasImageVariable.Changed.Register(OnApiImageStatusChanged);
+            DebugLog($"Subscribed to API Image Variable: {apiHasImageVariable.name}");
+        }
 
-        // Initialize last states
-        lastVideoState = GetBoolValue(isVideoActive, isVideoActiveRef);
-        lastImageState = GetBoolValue(isImageActive, isImageActiveRef);
+        if (apiHasVideoVariable != null)
+        {
+            apiHasVideoVariable.Changed.Register(OnApiVideoStatusChanged);
+            DebugLog($"Subscribed to API Video Variable: {apiHasVideoVariable.name}");
+        }
 
-        // Initial setup
-        UpdateRenderTextures();
+        if (apiHasAnyMediaVariable != null)
+        {
+            apiHasAnyMediaVariable.Changed.Register(OnApiAnyMediaStatusChanged);
+            DebugLog($"Subscribed to API Any Media Variable: {apiHasAnyMediaVariable.name}");
+        }
+
+        // Initialize display control variables
+        InitializeDisplayVariables();
+
+        // Set initial state
+        UpdateDisplayState();
+        hasInitialized = true;
+
+        DebugLog("RenderTextureController initialization complete");
+    }
+
+    private void InitializeDisplayVariables()
+    {
+        // Initialize display control variables - start with image active by default
+        if (displayImageActive != null)
+        {
+            displayImageActive.Value = true;
+            currentImageDisplayState = true;
+            lastRequestedImageState = true;
+            DebugLog($"Initialized Display Image Variable: {displayImageActive.name} (DEFAULT ACTIVE)");
+        }
+
+        if (displayVideoActive != null)
+        {
+            displayVideoActive.Value = false;
+            DebugLog($"Initialized Display Video Variable: {displayVideoActive.name}");
+        }
+
+        if (displayAnyActive != null)
+        {
+            displayAnyActive.Value = true; // Always true since we enforce at least one active
+            DebugLog($"Initialized Display Any Variable: {displayAnyActive.name} (ALWAYS TRUE)");
+        }
+
+        // Make sure the default image GameObject is active
+        SetGameObjectActive(imageRenderTextureObject, true);
+        SetGameObjectActive(videoRenderTextureObject, false);
     }
 
     private void OnDestroy()
     {
-        // Unsubscribe from atom bool variable changes
-        if (isAnyActive != null)
-            isAnyActive.Changed.Unregister(OnAnyActiveChanged);
+        // Unsubscribe from API status changes
+        if (apiHasImageVariable != null)
+            apiHasImageVariable.Changed.Unregister(OnApiImageStatusChanged);
 
-        if (isImageActive != null)
-            isImageActive.Changed.Unregister(OnImageActiveChanged);
+        if (apiHasVideoVariable != null)
+            apiHasVideoVariable.Changed.Unregister(OnApiVideoStatusChanged);
 
-        if (isVideoActive != null)
-            isVideoActive.Changed.Unregister(OnVideoActiveChanged);
+        if (apiHasAnyMediaVariable != null)
+            apiHasAnyMediaVariable.Changed.Unregister(OnApiAnyMediaStatusChanged);
     }
 
-    private void OnAnyActiveChanged(bool value)
+    // API Status Change Handlers (these respond to external API changes)
+    private void OnApiImageStatusChanged(bool hasImageFromApi)
     {
-        UpdateRenderTextures();
-    }
+        DebugLog($"API Image Status Changed: {hasImageFromApi}");
 
-    private void OnImageActiveChanged(bool value)
-    {
-        if (value && !lastImageState) // Image is being activated
+        if (hasImageFromApi)
         {
-            HandleImageActivation();
+            // API reports image is available - request to activate image display
+            RequestImageActivation();
         }
-        lastImageState = value;
-        UpdateRenderTextures();
-    }
-
-    private void OnVideoActiveChanged(bool value)
-    {
-        if (value && !lastVideoState) // Video is being activated
+        else if (maintainLastActiveState)
         {
-            HandleVideoActivation();
+            // API reports no image, but we maintain last state unless video takes over
+            DebugLog("API reports no image, but maintaining last state if no video is active");
+            if (!GetApiVideoStatus())
+            {
+                // No video either, so we can maintain current image state if it was active
+                // Don't automatically deactivate
+            }
         }
-        lastVideoState = value;
-        UpdateRenderTextures();
-    }
-
-    private void HandleImageActivation()
-    {
-        bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
-
-        if (videoActive)
+        else
         {
-            if (enableMutualExclusionWarnings)
-            {
-                Debug.LogWarning("[RenderTextureController] Conflict detected: Both image and video render textures are trying to be active simultaneously!");
-            }
-
-            if (videoPriority)
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] Video has priority - deactivating image render texture.");
-                }
-                // Deactivate image
-                SetImageActiveInternal(false);
-            }
-            else
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] Image has priority - deactivating video render texture.");
-                }
-                // Deactivate video
-                SetVideoActiveInternal(false);
-            }
+            // Immediate deactivation when API reports no image
+            RequestImageDeactivation();
         }
     }
 
-    private void HandleVideoActivation()
+    private void OnApiVideoStatusChanged(bool hasVideoFromApi)
     {
-        bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
+        DebugLog($"API Video Status Changed: {hasVideoFromApi}");
 
-        if (imageActive)
+        if (hasVideoFromApi)
         {
-            if (enableMutualExclusionWarnings)
+            // API reports video is available - request to activate video display
+            RequestVideoActivation();
+        }
+        else if (maintainLastActiveState)
+        {
+            // API reports no video, but we maintain last state unless image takes over
+            DebugLog("API reports no video, but maintaining last state if no image is active");
+            if (!GetApiImageStatus())
             {
-                Debug.LogWarning("[RenderTextureController] Conflict detected: Both image and video render textures are trying to be active simultaneously!");
+                // No image either, so we can maintain current video state if it was active
+                // Don't automatically deactivate
             }
-
-            if (videoPriority)
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] Video has priority - deactivating image render texture.");
-                }
-                // Deactivate image
-                SetImageActiveInternal(false);
-            }
-            else
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] Image has priority - deactivating video render texture.");
-                }
-                // Deactivate video
-                SetVideoActiveInternal(false);
-            }
+        }
+        else
+        {
+            // Immediate deactivation when API reports no video
+            RequestVideoDeactivation();
         }
     }
 
-    private void UpdateRenderTextures()
+    private void OnApiAnyMediaStatusChanged(bool hasAnyMediaFromApi)
     {
-        bool anyActive = GetBoolValue(isAnyActive, isAnyActiveRef);
-        bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
-        bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
+        DebugLog($"API Any Media Status Changed: {hasAnyMediaFromApi}");
 
-        // Check for mutual exclusion violation and resolve it
-        if (imageActive && videoActive)
+        if (!hasAnyMediaFromApi && !maintainLastActiveState)
         {
-            if (enableMutualExclusionWarnings)
-            {
-                Debug.LogWarning("[RenderTextureController] Mutual exclusion violation detected during update - resolving based on priority.");
-            }
-
-            if (videoPriority)
-            {
-                imageActive = false;
-                SetImageActiveInternal(false);
-            }
-            else
-            {
-                videoActive = false;
-                SetVideoActiveInternal(false);
-            }
+            // API reports no media at all and we don't maintain state - deactivate everything
+            RequestDeactivateAll();
         }
+    }
 
-        // Only activate render textures if something is active
-        if (!anyActive)
+    // Request Methods (these handle the logic for what should be displayed)
+    private void RequestImageActivation()
+    {
+        if (Time.time - lastStateChangeTime < STATE_CHANGE_DEBOUNCE)
         {
-            SetGameObjectActive(videoRenderTextureObject, false);
-            SetGameObjectActive(imageRenderTextureObject, false);
+            DebugLog("Image activation request debounced");
             return;
         }
 
-        // Control video render texture
-        SetGameObjectActive(videoRenderTextureObject, videoActive);
+        DebugLog("Requesting image activation");
+        lastRequestedImageState = true;
 
-        // Control image render texture
-        SetGameObjectActive(imageRenderTextureObject, imageActive);
+        // Check for conflicts
+        if (currentVideoDisplayState)
+        {
+            if (videoPriority)
+            {
+                DebugLog("Video has priority - ignoring image activation request");
+                return;
+            }
+            else
+            {
+                DebugLog("Image has priority - deactivating video");
+                SetVideoDisplayState(false);
+            }
+        }
 
-        // Debug logging
-        Debug.Log($"Render Textures Updated - Any: {anyActive}, Video: {videoActive}, Image: {imageActive}");
+        SetImageDisplayState(true);
     }
 
-    private bool GetBoolValue(BoolVariable variable, BoolReference reference)
+    private void RequestVideoActivation()
     {
-        // Try to get value from BoolVariable first, then BoolReference as fallback
-        if (variable != null)
-            return variable.Value;
+        if (Time.time - lastStateChangeTime < STATE_CHANGE_DEBOUNCE)
+        {
+            DebugLog("Video activation request debounced");
+            return;
+        }
 
-        if (reference != null)
-            return reference.Value;
+        DebugLog("Requesting video activation");
+        lastRequestedVideoState = true;
 
-        return false;
+        // Check for conflicts
+        if (currentImageDisplayState)
+        {
+            if (videoPriority)
+            {
+                DebugLog("Video has priority - deactivating image");
+                SetImageDisplayState(false);
+            }
+            else
+            {
+                DebugLog("Image has priority - ignoring video activation request");
+                return;
+            }
+        }
+
+        SetVideoDisplayState(true);
+    }
+
+    private void RequestImageDeactivation()
+    {
+        DebugLog("Requesting image deactivation");
+        lastRequestedImageState = false;
+
+        // Only deactivate if video will be active, otherwise keep image active
+        if (currentVideoDisplayState || GetApiVideoStatus())
+        {
+            SetImageDisplayState(false);
+        }
+        else
+        {
+            DebugLog("Cannot deactivate image - no video active. Keeping image active.");
+        }
+    }
+
+    private void RequestVideoDeactivation()
+    {
+        DebugLog("Requesting video deactivation");
+        lastRequestedVideoState = false;
+
+        // Only deactivate if image will be active, otherwise keep video active
+        if (currentImageDisplayState || GetApiImageStatus())
+        {
+            SetVideoDisplayState(false);
+        }
+        else
+        {
+            DebugLog("Cannot deactivate video - no image active. Keeping video active.");
+        }
+    }
+
+    private void RequestDeactivateAll()
+    {
+        DebugLog("Requesting deactivation of all displays - but enforcing at least one stays active");
+        lastRequestedImageState = false;
+        lastRequestedVideoState = false;
+
+        // Don't actually deactivate both - the UpdateAnyActiveState will handle keeping one active
+        if (videoPriority && currentVideoDisplayState)
+        {
+            // Keep video, deactivate image
+            SetImageDisplayState(false);
+        }
+        else if (currentImageDisplayState)
+        {
+            // Keep image, deactivate video
+            SetVideoDisplayState(false);
+        }
+        else
+        {
+            // Neither is currently active, activate default (image)
+            SetImageDisplayState(true);
+            lastRequestedImageState = true;
+        }
+    }
+
+    // Core State Management Methods
+    private void SetImageDisplayState(bool active)
+    {
+        if (currentImageDisplayState == active)
+            return; // No change needed
+
+        currentImageDisplayState = active;
+        lastStateChangeTime = Time.time;
+
+        // Update the display control variable
+        if (displayImageActive != null)
+            displayImageActive.Value = active;
+
+        // Update GameObjects
+        SetGameObjectActive(imageRenderTextureObject, active);
+
+        if (active)
+        {
+            FitRenderTextureToCanvas(imageRenderTextureObject);
+        }
+
+        UpdateAnyActiveState();
+        DebugLog($"Image display state set to: {active}");
+    }
+
+    private void SetVideoDisplayState(bool active)
+    {
+        if (currentVideoDisplayState == active)
+            return; // No change needed
+
+        currentVideoDisplayState = active;
+        lastStateChangeTime = Time.time;
+
+        // Update the display control variable
+        if (displayVideoActive != null)
+            displayVideoActive.Value = active;
+
+        // Update GameObjects
+        SetGameObjectActive(videoRenderTextureObject, active);
+
+        if (active)
+        {
+            FitRenderTextureToCanvas(videoRenderTextureObject);
+        }
+
+        UpdateAnyActiveState();
+        DebugLog($"Video display state set to: {active}");
+    }
+
+    private void UpdateAnyActiveState()
+    {
+        bool anyActive = currentImageDisplayState || currentVideoDisplayState;
+
+        // ENFORCE: Always keep at least one active - if both are trying to be false, keep the last one that was true
+        if (!anyActive)
+        {
+            if (lastRequestedImageState && !lastRequestedVideoState)
+            {
+                DebugLog("Enforcing: Keeping image active as it was the last requested");
+                currentImageDisplayState = true;
+                if (displayImageActive != null) displayImageActive.Value = true;
+                SetGameObjectActive(imageRenderTextureObject, true);
+                anyActive = true;
+            }
+            else if (lastRequestedVideoState && !lastRequestedImageState)
+            {
+                DebugLog("Enforcing: Keeping video active as it was the last requested");
+                currentVideoDisplayState = true;
+                if (displayVideoActive != null) displayVideoActive.Value = true;
+                SetGameObjectActive(videoRenderTextureObject, true);
+                anyActive = true;
+            }
+            else
+            {
+                // Default to image if no clear preference
+                DebugLog("Enforcing: Defaulting to image active (no clear last state)");
+                currentImageDisplayState = true;
+                lastRequestedImageState = true;
+                if (displayImageActive != null) displayImageActive.Value = true;
+                SetGameObjectActive(imageRenderTextureObject, true);
+                anyActive = true;
+            }
+        }
+
+        if (displayAnyActive != null)
+            displayAnyActive.Value = anyActive;
+
+        DebugLog($"Any active state updated to: {anyActive} (Image: {currentImageDisplayState}, Video: {currentVideoDisplayState})");
+    }
+
+    private void UpdateDisplayState()
+    {
+        // This method reconciles API status with display state
+        bool apiHasImage = GetApiImageStatus();
+        bool apiHasVideo = GetApiVideoStatus();
+        bool apiHasAny = GetApiAnyStatus();
+
+        DebugLog($"UpdateDisplayState - API Status: Image={apiHasImage}, Video={apiHasVideo}, Any={apiHasAny}");
+
+        if (apiHasVideo && apiHasImage)
+        {
+            // Both available - apply priority
+            if (videoPriority)
+            {
+                RequestVideoActivation();
+            }
+            else
+            {
+                RequestImageActivation();
+            }
+        }
+        else if (apiHasVideo)
+        {
+            RequestVideoActivation();
+        }
+        else if (apiHasImage)
+        {
+            RequestImageActivation();
+        }
+        else if (!maintainLastActiveState)
+        {
+            // No media available and not maintaining state
+            RequestDeactivateAll();
+        }
+        // If maintainLastActiveState is true and no API media, we keep current state
+    }
+
+    // Helper Methods
+    private bool GetApiImageStatus()
+    {
+        return apiHasImageVariable?.Value ?? false;
+    }
+
+    private bool GetApiVideoStatus()
+    {
+        return apiHasVideoVariable?.Value ?? false;
+    }
+
+    private bool GetApiAnyStatus()
+    {
+        return apiHasAnyMediaVariable?.Value ?? false;
     }
 
     private void SetGameObjectActive(GameObject obj, bool active)
@@ -221,49 +456,28 @@ public class RenderTextureController : MonoBehaviour
         if (obj != null && obj.activeSelf != active)
         {
             obj.SetActive(active);
+            DebugLog($"GameObject {obj.name} set to: {active}");
         }
     }
 
-    // Internal methods to set values without triggering mutual exclusion checks
-    private void SetVideoActiveInternal(bool active)
+    private void DebugLog(string message)
     {
-        if (isVideoActive != null)
+        if (enableDebugLogs)
         {
-            lastVideoState = active;
-            isVideoActive.Value = active;
-        }
-        else if (isVideoActiveRef != null)
-        {
-            lastVideoState = active;
-            isVideoActiveRef.Value = active;
+            Debug.Log($"[RenderTextureController] {message}");
         }
     }
 
-    private void SetImageActiveInternal(bool active)
-    {
-        if (isImageActive != null)
-        {
-            lastImageState = active;
-            isImageActive.Value = active;
-        }
-        else if (isImageActiveRef != null)
-        {
-            lastImageState = active;
-            isImageActiveRef.Value = active;
-        }
-    }
-
+    // Canvas Fitting Methods (keeping your existing logic)
     private void FitRenderTextureToCanvas(GameObject renderTextureObject)
     {
         if (renderTextureObject == null || targetCanvas == null)
             return;
 
-        // Get the canvas dimensions
         Vector2 canvasSize = GetCanvasSize();
         if (canvasSize == Vector2.zero)
             return;
 
-        // Try to get RectTransform first (for UI objects)
         RectTransform rectTransform = renderTextureObject.GetComponent<RectTransform>();
         if (rectTransform != null)
         {
@@ -271,7 +485,6 @@ public class RenderTextureController : MonoBehaviour
         }
         else
         {
-            // Fallback to regular Transform (for 3D objects)
             FitWorldSpaceRenderTexture(renderTextureObject.transform, canvasSize);
         }
     }
@@ -293,13 +506,9 @@ public class RenderTextureController : MonoBehaviour
         if (forceOverrideLayout)
         {
             if (sizeFitter != null)
-            {
                 sizeFitter.enabled = false;
-            }
             if (aspectFitter != null)
-            {
                 aspectFitter.enabled = false;
-            }
         }
 
         // Set anchors to center-center so sizeDelta works properly
@@ -317,7 +526,6 @@ public class RenderTextureController : MonoBehaviour
         }
         else
         {
-            // Fallback to current rect size or canvas size
             textureSize = rectTransform.sizeDelta != Vector2.zero ? rectTransform.sizeDelta : canvasSize;
         }
 
@@ -328,13 +536,11 @@ public class RenderTextureController : MonoBehaviour
         Vector2 newSize;
         if (textureAspect > canvasAspect)
         {
-            // Texture is wider than canvas - scale to fill height, width will overflow
             newSize.y = canvasSize.y;
             newSize.x = canvasSize.y * textureAspect;
         }
         else
         {
-            // Texture is taller than canvas - scale to fill width, height will overflow  
             newSize.x = canvasSize.x;
             newSize.y = canvasSize.x / textureAspect;
         }
@@ -353,97 +559,67 @@ public class RenderTextureController : MonoBehaviour
             newSize.y *= scale;
         }
 
-        // Apply the new size using sizeDelta
         rectTransform.sizeDelta = newSize;
-
-        // Center the render texture
         rectTransform.anchoredPosition = Vector2.zero;
 
-        // If there's a layout element, update it too
         if (layoutElement != null && forceOverrideLayout)
         {
             layoutElement.preferredWidth = newSize.x;
             layoutElement.preferredHeight = newSize.y;
         }
 
-        // Force layout rebuild if in a layout group
         UnityEngine.UI.LayoutGroup parentLayout = rectTransform.GetComponentInParent<UnityEngine.UI.LayoutGroup>();
         if (parentLayout != null)
         {
             UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(parentLayout.transform as RectTransform);
         }
 
-        Debug.Log($"Fitted UI RenderTexture (SizeDelta) - Canvas: {canvasSize}, Texture: {textureSize}, New Size: {newSize}, Final SizeDelta: {rectTransform.sizeDelta}");
+        DebugLog($"Fitted UI RenderTexture - Canvas: {canvasSize}, New Size: {newSize}");
     }
 
     private void FitUIRenderTextureWithAnchors(RectTransform rectTransform, Vector2 canvasSize)
     {
-        // Use anchor stretching to fill the entire canvas
         rectTransform.anchorMin = Vector2.zero;
         rectTransform.anchorMax = Vector2.one;
         rectTransform.offsetMin = Vector2.zero;
         rectTransform.offsetMax = Vector2.zero;
         rectTransform.pivot = new Vector2(0.5f, 0.5f);
 
-        // Get the texture for UV rect adjustment
         UnityEngine.UI.RawImage rawImage = rectTransform.GetComponent<UnityEngine.UI.RawImage>();
 
         if (rawImage != null && rawImage.texture != null)
         {
             Vector2 textureSize = new Vector2(rawImage.texture.width, rawImage.texture.height);
-
-            // Calculate aspect ratios
             float canvasAspect = canvasSize.x / canvasSize.y;
             float textureAspect = textureSize.x / textureSize.y;
 
-            // Always fill the entire canvas - crop the texture if needed
             Rect uvRect = new Rect(0, 0, 1, 1);
 
             if (textureAspect > canvasAspect)
             {
-                // Texture is wider than canvas - crop left and right sides
                 float scale = canvasAspect / textureAspect;
                 float offset = (1f - scale) * 0.5f;
                 uvRect = new Rect(offset, 0, scale, 1);
             }
             else if (textureAspect < canvasAspect)
             {
-                // Texture is taller than canvas - crop top and bottom
                 float scale = textureAspect / canvasAspect;
                 float offset = (1f - scale) * 0.5f;
                 uvRect = new Rect(0, offset, 1, scale);
             }
-            // If aspects match exactly, uvRect stays (0,0,1,1)
 
             rawImage.uvRect = uvRect;
-
-            Debug.Log($"Fitted UI RenderTexture (Full Canvas) - Canvas: {canvasSize}, Texture: {textureSize}, Canvas Aspect: {canvasAspect:F2}, Texture Aspect: {textureAspect:F2}, UV Rect: {uvRect}");
-        }
-        else
-        {
-            Debug.Log($"Fitted UI RenderTexture (Full Canvas) - Stretched to fill entire canvas: {canvasSize}");
+            DebugLog($"Fitted with anchors - UV Rect: {uvRect}");
         }
     }
 
     private void FitWorldSpaceRenderTexture(Transform transform, Vector2 canvasSize)
     {
-        // For world space objects, we need to convert canvas size to world units
-        // This is a simplified approach - you may need to adjust based on your camera setup
-
-        // Get the original scale
         Vector3 originalScale = transform.localScale;
-
-        // Calculate the scale factor based on canvas size
-        // Assuming the object should fill the screen
-        float canvasAspect = canvasSize.x / canvasSize.y;
-
-        // Simple scaling approach - you may want to customize this based on your needs
-        float scaleFactor = Mathf.Max(canvasSize.x / 1920f, canvasSize.y / 1080f); // Normalize to common resolution
-
+        float scaleFactor = Mathf.Max(canvasSize.x / 1920f, canvasSize.y / 1080f);
         Vector3 newScale = originalScale * scaleFactor;
         transform.localScale = newScale;
-
-        Debug.Log($"Fitted World Space RenderTexture - Canvas: {canvasSize}, Scale Factor: {scaleFactor}");
+        DebugLog($"Fitted World Space - Scale Factor: {scaleFactor}");
     }
 
     private Vector2 GetCanvasSize()
@@ -451,188 +627,81 @@ public class RenderTextureController : MonoBehaviour
         if (targetCanvas == null)
             return Vector2.zero;
 
-        // Try to get size from assigned RectTransform first
         if (canvasRectTransform != null)
-        {
             return canvasRectTransform.sizeDelta;
-        }
 
-        // Fallback to canvas RectTransform
         RectTransform canvasRect = targetCanvas.GetComponent<RectTransform>();
         if (canvasRect != null)
-        {
             return canvasRect.sizeDelta;
-        }
 
-        // Last resort - use screen dimensions
         return new Vector2(Screen.width, Screen.height);
     }
 
-    // Public methods for manual control with mutual exclusion
-    public void SetVideoActive(bool active)
+    // Public API Methods
+    public void ForceActivateImage()
     {
-        if (active)
-        {
-            // Check if image is currently active and handle conflict
-            bool imageCurrentlyActive = GetBoolValue(isImageActive, isImageActiveRef);
-            if (imageCurrentlyActive)
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] SetVideoActive(true) called while image is active - deactivating image due to mutual exclusion.");
-                }
-                SetImageActiveInternal(false);
-            }
-        }
-
-        SetVideoActiveInternal(active);
+        DebugLog("Force activating image");
+        RequestImageActivation();
     }
 
-    public void SetImageActive(bool active)
+    public void ForceActivateVideo()
     {
-        if (active)
-        {
-            // Check if video is currently active and handle conflict
-            bool videoCurrentlyActive = GetBoolValue(isVideoActive, isVideoActiveRef);
-            if (videoCurrentlyActive)
-            {
-                if (enableMutualExclusionWarnings)
-                {
-                    Debug.LogWarning("[RenderTextureController] SetImageActive(true) called while video is active - deactivating video due to mutual exclusion.");
-                }
-                SetVideoActiveInternal(false);
-            }
-        }
-
-        SetImageActiveInternal(active);
+        DebugLog("Force activating video");
+        RequestVideoActivation();
     }
 
-    public void SetAnyActive(bool active)
+    public void ForceDeactivateAll()
     {
-        if (isAnyActive != null)
-            isAnyActive.Value = active;
-        else if (isAnyActiveRef != null)
-            isAnyActiveRef.Value = active;
+        DebugLog("Force deactivate requested - but maintaining at least one active");
+        // Don't actually deactivate all - this would violate our "always one active" rule
+        // Instead, reset to default state (image active)
+        lastRequestedImageState = true;
+        lastRequestedVideoState = false;
+        SetVideoDisplayState(false);
+        SetImageDisplayState(true);
     }
 
-    // Method to toggle between video and image (safe way to switch)
-    public void SwitchToVideo()
-    {
-        if (enableMutualExclusionWarnings)
-        {
-            Debug.Log("[RenderTextureController] Switching to video render texture.");
-        }
-        SetImageActiveInternal(false);
-        SetVideoActiveInternal(true);
-    }
-
-    public void SwitchToImage()
-    {
-        if (enableMutualExclusionWarnings)
-        {
-            Debug.Log("[RenderTextureController] Switching to image render texture.");
-        }
-        SetVideoActiveInternal(false);
-        SetImageActiveInternal(true);
-    }
-
-    // Method to deactivate both
-    public void DeactivateBoth()
-    {
-        SetVideoActiveInternal(false);
-        SetImageActiveInternal(false);
-    }
-
-    // Method to update render textures manually if needed
-    [ContextMenu("Update Render Textures")]
-    public void ManualUpdateRenderTextures()
-    {
-        UpdateRenderTextures();
-    }
-
-    // Method to manually fit render textures to canvas
-    [ContextMenu("Fit Render Textures to Canvas")]
-    public void FitRenderTexturesToCanvas()
-    {
-        if (videoRenderTextureObject != null && videoRenderTextureObject.activeSelf)
-            FitRenderTextureToCanvas(videoRenderTextureObject);
-
-        if (imageRenderTextureObject != null && imageRenderTextureObject.activeSelf)
-            FitRenderTextureToCanvas(imageRenderTextureObject);
-    }
-
-    // Public method to update canvas reference and refit
-    public void SetCanvas(Canvas newCanvas)
-    {
-        targetCanvas = newCanvas;
-        if (newCanvas != null)
-        {
-            canvasRectTransform = newCanvas.GetComponent<RectTransform>();
-            FitRenderTexturesToCanvas();
-        }
-    }
-
-    // Force the render textures to fill the entire canvas
-    [ContextMenu("Force Fill Entire Canvas")]
-    public void ForceFillEntireCanvas()
-    {
-        useAnchorStretching = true;
-        forceOverrideLayout = true;
-        FitRenderTexturesToCanvas();
-    }
-
-    // Toggle priority system
     public void SetVideoPriority(bool priority)
     {
         videoPriority = priority;
-        if (enableMutualExclusionWarnings)
-        {
-            Debug.Log($"[RenderTextureController] Video priority set to: {priority}");
-        }
+        DebugLog($"Video priority set to: {priority}");
+        UpdateDisplayState(); // Recheck current state with new priority
     }
 
-    // Enable/disable warnings
-    public void SetWarningsEnabled(bool enabled)
+    public void SetMaintainLastState(bool maintain)
     {
-        enableMutualExclusionWarnings = enabled;
+        maintainLastActiveState = maintain;
+        DebugLog($"Maintain last state set to: {maintain}");
     }
 
-    // Debug method to check current state
+    // Context Menu Methods for Testing
     [ContextMenu("Debug Current State")]
     public void DebugCurrentState()
     {
-        Vector2 canvasSize = GetCanvasSize();
-        bool videoActive = GetBoolValue(isVideoActive, isVideoActiveRef);
-        bool imageActive = GetBoolValue(isImageActive, isImageActiveRef);
+        DebugLog("=== CURRENT STATE DEBUG ===");
+        DebugLog($"API Status - Image: {GetApiImageStatus()}, Video: {GetApiVideoStatus()}, Any: {GetApiAnyStatus()}");
+        DebugLog($"Display State - Image: {currentImageDisplayState}, Video: {currentVideoDisplayState}");
+        DebugLog($"Last Requested - Image: {lastRequestedImageState}, Video: {lastRequestedVideoState}");
+        DebugLog($"Settings - Video Priority: {videoPriority}, Maintain State: {maintainLastActiveState}");
+        DebugLog($"GameObjects - Image Active: {imageRenderTextureObject?.activeSelf}, Video Active: {videoRenderTextureObject?.activeSelf}");
+        DebugLog("=== END STATE DEBUG ===");
+    }
 
-        Debug.Log($"Canvas Size: {canvasSize}");
-        Debug.Log($"Use Anchor Stretching: {useAnchorStretching}");
-        Debug.Log($"Force Override Layout: {forceOverrideLayout}");
-        Debug.Log($"Video Priority: {videoPriority}");
-        Debug.Log($"Warnings Enabled: {enableMutualExclusionWarnings}");
-        Debug.Log($"Current States - Video: {videoActive}, Image: {imageActive}");
+    [ContextMenu("Force Update Display State")]
+    public void ForceUpdateDisplayState()
+    {
+        UpdateDisplayState();
+    }
 
-        if (videoActive && imageActive)
-        {
-            Debug.LogError("[RenderTextureController] CONFLICT: Both video and image are currently active!");
-        }
+    [ContextMenu("Test Image Activation")]
+    public void TestImageActivation()
+    {
+        ForceActivateImage();
+    }
 
-        if (videoRenderTextureObject != null)
-        {
-            RectTransform videoRect = videoRenderTextureObject.GetComponent<RectTransform>();
-            if (videoRect != null)
-            {
-                Debug.Log($"Video RenderTexture - Size: {videoRect.sizeDelta}, Anchors: Min{videoRect.anchorMin} Max{videoRect.anchorMax}");
-            }
-        }
-
-        if (imageRenderTextureObject != null)
-        {
-            RectTransform imageRect = imageRenderTextureObject.GetComponent<RectTransform>();
-            if (imageRect != null)
-            {
-                Debug.Log($"Image RenderTexture - Size: {imageRect.sizeDelta}, Anchors: Min{imageRect.anchorMin} Max{imageRect.anchorMax}");
-            }
-        }
+    [ContextMenu("Test Video Activation")]
+    public void TestVideoActivation()
+    {
+        ForceActivateVideo();
     }
 }

@@ -10,6 +10,10 @@ public class DeviceSpecificImageManager : MonoBehaviour
     // Log tag for easy filtering
     private const string LOG_TAG = "[DeviceSpecificImageManager]";
 
+    [Header("Debugging")]
+    [Tooltip("If unchecked, ALL logs (Log/Warning/Error) from this component are suppressed.")]
+    [SerializeField] private bool enableLogs = true;
+
     [Header("UI Toolkit Overlay")]
     public UIDocument overlayDocument;
 
@@ -29,7 +33,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
                 return deviceIdVariable.Value;
             }
 
-            Debug.LogError($"{LOG_TAG} No Device ID configured! Please assign a Unity Atoms StringVariable.");
+            DbgError($"{LOG_TAG} No Device ID configured! Please assign a Unity Atoms StringVariable.");
             return "MISSING_DEVICE_ID";
         }
     }
@@ -72,6 +76,12 @@ public class DeviceSpecificImageManager : MonoBehaviour
     private int currentMediaId = 0;
     private Texture2D currentTexture;
     private MediaType currentMediaType = MediaType.None;
+
+    // ===== Logging wrappers (mute all logs when enableLogs is false) =====
+    private void DbgLog(string msg) { if (enableLogs) Debug.Log(msg); }
+    private void DbgWarning(string msg) { if (enableLogs) Debug.LogWarning(msg); }
+    private void DbgError(string msg) { if (enableLogs) Debug.LogError(msg); }
+    // ====================================================================
 
     public enum MediaType
     {
@@ -135,7 +145,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     void Start()
     {
-        Debug.Log($"{LOG_TAG} Start() called");
+        DbgLog($"{LOG_TAG} Start() called");
 
         InitializeAtomVariables();
         InitializeOverlay();
@@ -144,7 +154,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (string.IsNullOrEmpty(serverURL))
         {
             serverURL = "https://unity-server-control-patrykbroda.replit.app";
-            Debug.Log($"{LOG_TAG} Set default serverURL to: {serverURL}");
+            DbgLog($"{LOG_TAG} Set default serverURL to: {serverURL}");
         }
 
         UpdateStatus("Initializing...", ConnectionState.Connecting);
@@ -154,7 +164,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
             connectionManager = FindFirstObjectByType<ConnectionManager>();
             if (connectionManager == null)
             {
-                Debug.LogWarning($"{LOG_TAG} No ConnectionManager found! Will try to start polling anyway.");
+                DbgWarning($"{LOG_TAG} No ConnectionManager found! Will try to start polling anyway.");
             }
         }
 
@@ -163,62 +173,62 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     void InitializeAtomVariables()
     {
-        Debug.Log($"{LOG_TAG} === UNITY ATOMS API VARIABLES INITIALIZATION ===");
+        DbgLog($"{LOG_TAG} === UNITY ATOMS API VARIABLES INITIALIZATION ===");
 
         // Initialize API status variables to false
         if (apiHasImageVariable != null)
         {
             apiHasImageVariable.Value = false;
-            Debug.Log($"{LOG_TAG} ✅ apiHasImageVariable initialized: {apiHasImageVariable.name}");
+            DbgLog($"{LOG_TAG} ✅ apiHasImageVariable initialized: {apiHasImageVariable.name}");
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} ⚠️ apiHasImageVariable not assigned - please assign a BoolVariable in inspector");
+            DbgWarning($"{LOG_TAG} ⚠️ apiHasImageVariable not assigned - please assign a BoolVariable in inspector");
         }
 
         if (apiHasVideoVariable != null)
         {
             apiHasVideoVariable.Value = false;
-            Debug.Log($"{LOG_TAG} ✅ apiHasVideoVariable initialized: {apiHasVideoVariable.name}");
+            DbgLog($"{LOG_TAG} ✅ apiHasVideoVariable initialized: {apiHasVideoVariable.name}");
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} ⚠️ apiHasVideoVariable not assigned - please assign a BoolVariable in inspector");
+            DbgWarning($"{LOG_TAG} ⚠️ apiHasVideoVariable not assigned - please assign a BoolVariable in inspector");
         }
 
         if (apiHasAnyMediaVariable != null)
         {
             apiHasAnyMediaVariable.Value = false;
-            Debug.Log($"{LOG_TAG} ✅ apiHasAnyMediaVariable initialized: {apiHasAnyMediaVariable.name}");
+            DbgLog($"{LOG_TAG} ✅ apiHasAnyMediaVariable initialized: {apiHasAnyMediaVariable.name}");
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} ⚠️ apiHasAnyMediaVariable not assigned - please assign a BoolVariable in inspector");
+            DbgWarning($"{LOG_TAG} ⚠️ apiHasAnyMediaVariable not assigned - please assign a BoolVariable in inspector");
         }
 
-        Debug.Log($"{LOG_TAG} === END UNITY ATOMS API VARIABLES INITIALIZATION ===");
+        DbgLog($"{LOG_TAG} === END UNITY ATOMS API VARIABLES INITIALIZATION ===");
     }
 
     void LogDeviceIdInfo()
     {
-        Debug.Log($"{LOG_TAG} === DEVICE ID CONFIGURATION ===");
+        DbgLog($"{LOG_TAG} === DEVICE ID CONFIGURATION ===");
         if (deviceIdVariable != null)
         {
-            Debug.Log($"{LOG_TAG} ✅ Unity Atoms StringVariable found: {deviceIdVariable.name}");
-            Debug.Log($"{LOG_TAG}    Value: '{deviceIdVariable.Value}'");
-            Debug.Log($"{LOG_TAG}    Using Device ID: '{DeviceId}'");
+            DbgLog($"{LOG_TAG} ✅ Unity Atoms StringVariable found: {deviceIdVariable.name}");
+            DbgLog($"{LOG_TAG}    Value: '{deviceIdVariable.Value}'");
+            DbgLog($"{LOG_TAG}    Using Device ID: '{DeviceId}'");
         }
         else
         {
-            Debug.LogError($"{LOG_TAG} ❌ No Unity Atoms StringVariable assigned for Device ID!");
-            Debug.LogError($"{LOG_TAG}    Please assign a StringVariable in the inspector!");
+            DbgError($"{LOG_TAG} ❌ No Unity Atoms StringVariable assigned for Device ID!");
+            DbgError($"{LOG_TAG}    Please assign a StringVariable in the inspector!");
         }
-        Debug.Log($"{LOG_TAG} === END DEVICE ID CONFIG ===");
+        DbgLog($"{LOG_TAG} === END DEVICE ID CONFIG ===");
     }
 
     private void InitializeOverlay()
     {
-        Debug.Log($"{LOG_TAG} Initializing UI overlay...");
+        DbgLog($"{LOG_TAG} Initializing UI overlay...");
 
         if (overlayDocument == null)
         {
@@ -261,20 +271,20 @@ public class DeviceSpecificImageManager : MonoBehaviour
             if (deviceIdDisplay != null)
                 deviceIdDisplay.text = $"Device: {DeviceId}";
 
-            Debug.Log($"{LOG_TAG} UI overlay initialized successfully");
+            DbgLog($"{LOG_TAG} UI overlay initialized successfully");
         }
         else
         {
-            Debug.Log($"{LOG_TAG} No UI overlay document assigned - running without overlay");
+            DbgLog($"{LOG_TAG} No UI overlay document assigned - running without overlay");
         }
 
         if (outputRenderTexture != null)
         {
-            Debug.Log($"{LOG_TAG} RenderTexture assigned - {outputRenderTexture.width}x{outputRenderTexture.height} format:{outputRenderTexture.format}");
+            DbgLog($"{LOG_TAG} RenderTexture assigned - {outputRenderTexture.width}x{outputRenderTexture.height} format:{outputRenderTexture.format}");
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} No RenderTexture assigned - images will not be displayed!");
+            DbgWarning($"{LOG_TAG} No RenderTexture assigned - images will not be displayed!");
         }
     }
 
@@ -299,7 +309,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
             statusText.text = $"{stateText} {message}";
         }
 
-        Debug.Log($"{LOG_TAG} Status: {message} (State: {state}, MediaType: {currentMediaType})");
+        DbgLog($"{LOG_TAG} Status: {message} (State: {state}, MediaType: {currentMediaType})");
     }
 
     private void UpdateOverlayInfo()
@@ -343,7 +353,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     private IEnumerator WaitForConnectionThenPoll()
     {
-        Debug.Log($"{LOG_TAG} Waiting for connection...");
+        DbgLog($"{LOG_TAG} Waiting for connection...");
 
         if (connectionManager != null)
         {
@@ -357,7 +367,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
             yield return new WaitForSeconds(2f);
         }
 
-        Debug.Log($"{LOG_TAG} Connection established! Starting device-specific media polling...");
+        DbgLog($"{LOG_TAG} Connection established! Starting device-specific media polling...");
         UpdateStatus("Connected! Starting device-specific polling...", ConnectionState.Connected);
 
         isConnected = true;
@@ -378,13 +388,13 @@ public class DeviceSpecificImageManager : MonoBehaviour
                 bool isConnected = (bool)connectedProperty.GetValue(connectionManager);
                 bool isAuthenticated = (bool)authenticatedProperty.GetValue(connectionManager);
 
-                Debug.Log($"{LOG_TAG} Connection status - Connected: {isConnected}, Authenticated: {isAuthenticated}");
+                DbgLog($"{LOG_TAG} Connection status - Connected: {isConnected}, Authenticated: {isAuthenticated}");
                 return isConnected && isAuthenticated;
             }
         }
         catch (System.Exception e)
         {
-            Debug.Log($"{LOG_TAG} Could not check connection status: {e.Message}");
+            DbgLog($"{LOG_TAG} Could not check connection status: {e.Message}");
         }
 
         return true;
@@ -394,22 +404,22 @@ public class DeviceSpecificImageManager : MonoBehaviour
     {
         if (isPolling)
         {
-            Debug.Log($"{LOG_TAG} Already polling, skipping StartDeviceMediaPolling");
+            DbgLog($"{LOG_TAG} Already polling, skipping StartDeviceMediaPolling");
             return;
         }
 
-        Debug.Log($"{LOG_TAG} StartDeviceMediaPolling() called");
-        Debug.Log($"{LOG_TAG} serverURL = '{serverURL}'");
-        Debug.Log($"{LOG_TAG} deviceId = '{DeviceId}'");
+        DbgLog($"{LOG_TAG} StartDeviceMediaPolling() called");
+        DbgLog($"{LOG_TAG} serverURL = '{serverURL}'");
+        DbgLog($"{LOG_TAG} deviceId = '{DeviceId}'");
 
         if (string.IsNullOrEmpty(serverURL))
         {
             serverURL = "https://unity-server-control-patrykbroda.replit.app";
-            Debug.LogWarning($"{LOG_TAG} serverURL was empty! Set to default: {serverURL}");
+            DbgWarning($"{LOG_TAG} serverURL was empty! Set to default: {serverURL}");
         }
 
         isPolling = true;
-        Debug.Log($"{LOG_TAG} Started device-specific media polling every {pollingInterval} seconds");
+        DbgLog($"{LOG_TAG} Started device-specific media polling every {pollingInterval} seconds");
 
         UpdateStatus("Polling for device-specific media...", ConnectionState.Connected);
         UpdateOverlayInfo();
@@ -419,7 +429,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     public void StopDeviceMediaPolling()
     {
-        Debug.Log($"{LOG_TAG} Stopping device-specific media polling");
+        DbgLog($"{LOG_TAG} Stopping device-specific media polling");
         isPolling = false;
         UpdateStatus("Polling stopped", ConnectionState.Disconnected);
         UpdateOverlayInfo();
@@ -427,7 +437,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     private IEnumerator DeviceMediaPollingLoop()
     {
-        Debug.Log($"{LOG_TAG} DeviceMediaPollingLoop started");
+        DbgLog($"{LOG_TAG} DeviceMediaPollingLoop started");
 
         while (isPolling && isConnected)
         {
@@ -435,18 +445,18 @@ public class DeviceSpecificImageManager : MonoBehaviour
             yield return new WaitForSeconds(pollingInterval);
         }
 
-        Debug.Log($"{LOG_TAG} DeviceMediaPollingLoop ended");
+        DbgLog($"{LOG_TAG} DeviceMediaPollingLoop ended");
     }
 
     private IEnumerator CheckForDeviceMedia()
     {
         string url = $"{serverURL}/api/device/{DeviceId}/media";
-        Debug.Log($"{LOG_TAG} Polling device-specific URL: {url}");
+        DbgLog($"{LOG_TAG} Polling device-specific URL: {url}");
 
         string authToken = GetAuthToken();
         if (string.IsNullOrEmpty(authToken))
         {
-            Debug.LogError($"{LOG_TAG} ❌ No auth token found!");
+            DbgError($"{LOG_TAG} ❌ No auth token found!");
             UpdateStatus("No authentication token found", ConnectionState.Disconnected);
             yield break;
         }
@@ -457,15 +467,15 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             yield return www.SendWebRequest();
 
-            Debug.Log($"{LOG_TAG} Response Code: {www.responseCode}");
+            DbgLog($"{LOG_TAG} Response Code: {www.responseCode}");
 
             if (www.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"{LOG_TAG} Request failed - {www.error}");
+                DbgError($"{LOG_TAG} Request failed - {www.error}");
 
                 if (www.responseCode == 401)
                 {
-                    Debug.LogError($"{LOG_TAG} Authentication failed - token may be expired");
+                    DbgError($"{LOG_TAG} Authentication failed - token may be expired");
                     UpdateStatus("Authentication expired", ConnectionState.Disconnected);
                     HandleTokenExpired();
                     yield break;
@@ -489,23 +499,23 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (connectionManager != null && connectionManager.loginData != null && connectionManager.loginData.IsTokenValid())
         {
             authToken = connectionManager.loginData.AuthToken;
-            Debug.Log($"{LOG_TAG} ✅ Using auth token from UserLoginData ScriptableObject (primary source)");
+            DbgLog($"{LOG_TAG} ✅ Using auth token from UserLoginData ScriptableObject (primary source)");
         }
         else if (!string.IsNullOrEmpty(PlayerPrefs.GetString("auth_token", "")))
         {
             authToken = PlayerPrefs.GetString("auth_token", "");
-            Debug.LogWarning($"{LOG_TAG} ⚠️ Using auth token from PlayerPrefs 'auth_token' (fallback)");
+            DbgWarning($"{LOG_TAG} ⚠️ Using auth token from PlayerPrefs 'auth_token' (fallback)");
 
             if (connectionManager?.loginData != null)
             {
                 connectionManager.loginData.SetAuthToken(authToken);
-                Debug.Log($"{LOG_TAG} 🔄 Restored token to ScriptableObject from PlayerPrefs");
+                DbgLog($"{LOG_TAG} 🔄 Restored token to ScriptableObject from PlayerPrefs");
             }
         }
         else if (!string.IsNullOrEmpty(PlayerPrefs.GetString("AuthToken", "")))
         {
             authToken = PlayerPrefs.GetString("AuthToken", "");
-            Debug.LogWarning($"{LOG_TAG} ⚠️ Using auth token from PlayerPrefs 'AuthToken' (legacy fallback)");
+            DbgWarning($"{LOG_TAG} ⚠️ Using auth token from PlayerPrefs 'AuthToken' (legacy fallback)");
         }
 
         return authToken;
@@ -513,7 +523,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     private IEnumerator ProcessDeviceMediaResponse(string rawResponse)
     {
-        Debug.Log($"{LOG_TAG} RAW SERVER RESPONSE: {rawResponse}");
+        DbgLog($"{LOG_TAG} RAW SERVER RESPONSE: {rawResponse}");
 
         DeviceMediaResponse response = null;
         bool parseSuccess = false;
@@ -522,33 +532,33 @@ public class DeviceSpecificImageManager : MonoBehaviour
         {
             response = JsonUtility.FromJson<DeviceMediaResponse>(rawResponse);
             parseSuccess = true;
-            Debug.Log($"{LOG_TAG} ✅ JSON parsing successful");
-            Debug.Log($"{LOG_TAG} Parsed response: {response}");
+            DbgLog($"{LOG_TAG} ✅ JSON parsing successful");
+            DbgLog($"{LOG_TAG} Parsed response: {response}");
 
             // Debug the media structure
             if (response.media != null)
             {
-                Debug.Log($"{LOG_TAG} Media container found - Image: {(response.media.image != null ? "✅" : "❌")}, Video: {(response.media.video != null ? "✅" : "❌")}");
+                DbgLog($"{LOG_TAG} Media container found - Image: {(response.media.image != null ? "✅" : "❌")}, Video: {(response.media.video != null ? "✅" : "❌")}");
                 if (response.media.image != null)
                 {
-                    Debug.Log($"{LOG_TAG} Image details: {response.media.image}");
+                    DbgLog($"{LOG_TAG} Image details: {response.media.image}");
                 }
             }
             else
             {
-                Debug.Log($"{LOG_TAG} No media container in response");
+                DbgLog($"{LOG_TAG} No media container in response");
             }
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"{LOG_TAG} JSON parsing failed: {e.Message}");
+            DbgError($"{LOG_TAG} JSON parsing failed: {e.Message}");
             UpdateStatus($"JSON parsing failed", ConnectionState.Disconnected);
             parseSuccess = false;
         }
 
         if (!parseSuccess || response == null)
         {
-            Debug.LogError($"{LOG_TAG} Could not parse server response");
+            DbgError($"{LOG_TAG} Could not parse server response");
             yield break;
         }
 
@@ -566,7 +576,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (apiHasAnyMediaVariable != null)
             apiHasAnyMediaVariable.Value = hasImageInResponse || hasVideoInResponse;
 
-        Debug.Log($"{LOG_TAG} API Media Status - Image: {(hasImageInResponse ? "✅" : "❌")}, Video: {(hasVideoInResponse ? "✅" : "❌")}, Any: {(hasImageInResponse || hasVideoInResponse ? "✅" : "❌")}");
+        DbgLog($"{LOG_TAG} API Media Status - Image: {(hasImageInResponse ? "✅" : "❌")}, Video: {(hasVideoInResponse ? "✅" : "❌")}, Any: {(hasImageInResponse || hasVideoInResponse ? "✅" : "❌")}");
 
         // Validate user ID
         int expectedUserId = 0;
@@ -576,20 +586,20 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             if (response.userId != expectedUserId)
             {
-                Debug.LogError($"{LOG_TAG} 🚨 CRITICAL USER ID MISMATCH! Expected: {expectedUserId}, Got: {response.userId}");
+                DbgError($"{LOG_TAG} 🚨 CRITICAL USER ID MISMATCH! Expected: {expectedUserId}, Got: {response.userId}");
                 UpdateStatus("🚨 SECURITY ERROR: User ID mismatch!", ConnectionState.Disconnected);
                 yield break;
             }
             else
             {
-                Debug.Log($"{LOG_TAG} ✅ User ID matches correctly: {expectedUserId}");
+                DbgLog($"{LOG_TAG} ✅ User ID matches correctly: {expectedUserId}");
             }
         }
 
         // Validate device ID
         if (!string.IsNullOrEmpty(response.deviceId) && response.deviceId != DeviceId)
         {
-            Debug.LogError($"{LOG_TAG} 🚨 DEVICE ID MISMATCH! Expected: {DeviceId}, Got: {response.deviceId}");
+            DbgError($"{LOG_TAG} 🚨 DEVICE ID MISMATCH! Expected: {DeviceId}, Got: {response.deviceId}");
             UpdateStatus("🚨 DEVICE ID MISMATCH!", ConnectionState.Disconnected);
             yield break;
         }
@@ -608,11 +618,11 @@ public class DeviceSpecificImageManager : MonoBehaviour
         else
         {
             // If no mediaType specified, assume device-specific since we're polling device endpoint
-            Debug.Log($"{LOG_TAG} No mediaType in response, assuming device-specific");
+            DbgLog($"{LOG_TAG} No mediaType in response, assuming device-specific");
             newMediaType = MediaType.DeviceSpecific;
         }
 
-        Debug.Log($"{LOG_TAG} Detected media type: {newMediaType}");
+        DbgLog($"{LOG_TAG} Detected media type: {newMediaType}");
 
         bool hasMedia = response.media?.image != null && response.media.image.id > 0;
 
@@ -622,16 +632,16 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             if (mediaInfo.id != currentMediaId || newMediaType != currentMediaType)
             {
-                Debug.Log($"{LOG_TAG} New media detected!");
-                Debug.Log($"{LOG_TAG}   Media ID: {currentMediaId} -> {mediaInfo.id}");
-                Debug.Log($"{LOG_TAG}   Media Type: {currentMediaType} -> {newMediaType}");
+                DbgLog($"{LOG_TAG} New media detected!");
+                DbgLog($"{LOG_TAG}   Media ID: {currentMediaId} -> {mediaInfo.id}");
+                DbgLog($"{LOG_TAG}   Media Type: {currentMediaType} -> {newMediaType}");
 
                 currentMediaType = newMediaType;
                 yield return StartCoroutine(DownloadAndDisplayMedia(mediaInfo));
             }
             else
             {
-                Debug.Log($"{LOG_TAG} Same media as before (ID: {currentMediaId}, Type: {currentMediaType}), no download needed");
+                DbgLog($"{LOG_TAG} Same media as before (ID: {currentMediaId}, Type: {currentMediaType}), no download needed");
 
                 string typeDisplay = currentMediaType switch
                 {
@@ -645,7 +655,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         }
         else
         {
-            Debug.Log($"{LOG_TAG} ❌ No media detected");
+            DbgLog($"{LOG_TAG} ❌ No media detected");
             UpdateStatus("No media assigned", ConnectionState.Connected);
 
             if (currentMediaName != null)
@@ -657,7 +667,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             if (currentMediaId > 0)
             {
-                Debug.Log($"{LOG_TAG} Clearing previous media");
+                DbgLog($"{LOG_TAG} Clearing previous media");
                 ClearCurrentMedia();
             }
         }
@@ -667,10 +677,10 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     private IEnumerator DownloadAndDisplayMedia(DeviceMediaInfo mediaInfo)
     {
-        Debug.Log($"{LOG_TAG} Starting download of media: {mediaInfo}");
+        DbgLog($"{LOG_TAG} Starting download of media: {mediaInfo}");
 
         string mediaUrl = $"{serverURL}{mediaInfo.url}";
-        Debug.Log($"{LOG_TAG} Full media URL: {mediaUrl}");
+        DbgLog($"{LOG_TAG} Full media URL: {mediaUrl}");
 
         string typeDisplay = currentMediaType switch
         {
@@ -685,19 +695,19 @@ public class DeviceSpecificImageManager : MonoBehaviour
         {
             yield return www.SendWebRequest();
 
-            Debug.Log($"{LOG_TAG} Download response code: {www.responseCode}");
+            DbgLog($"{LOG_TAG} Download response code: {www.responseCode}");
 
             if (www.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"{LOG_TAG} Media download failed: {www.error}");
+                DbgError($"{LOG_TAG} Media download failed: {www.error}");
                 UpdateStatus($"Download failed: {www.error}", ConnectionState.Disconnected);
             }
             else
             {
-                Debug.Log($"{LOG_TAG} ✅ Media download successful!");
+                DbgLog($"{LOG_TAG} ✅ Media download successful!");
 
                 Texture2D downloadedTexture = ((DownloadHandlerTexture)www.downloadHandler).texture;
-                Debug.Log($"{LOG_TAG} Downloaded texture size: {downloadedTexture.width}x{downloadedTexture.height}");
+                DbgLog($"{LOG_TAG} Downloaded texture size: {downloadedTexture.width}x{downloadedTexture.height}");
 
                 if (currentTexture != null)
                 {
@@ -710,11 +720,11 @@ public class DeviceSpecificImageManager : MonoBehaviour
                 if (outputRenderTexture != null)
                 {
                     CopyTextureToRenderTexture(currentTexture, outputRenderTexture);
-                    Debug.Log($"{LOG_TAG} ✅ RenderTexture updated successfully");
+                    DbgLog($"{LOG_TAG} ✅ RenderTexture updated successfully");
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_TAG} ⚠️ No RenderTexture assigned");
+                    DbgWarning($"{LOG_TAG} ⚠️ No RenderTexture assigned");
                 }
 
                 if (currentMediaName != null)
@@ -723,7 +733,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
                 }
 
                 UpdateStatus($"Displaying: {mediaInfo.originalName} ({typeDisplay})", ConnectionState.Connected);
-                Debug.Log($"{LOG_TAG} Successfully loaded and displayed media: {mediaInfo.originalName} (Type: {currentMediaType})");
+                DbgLog($"{LOG_TAG} Successfully loaded and displayed media: {mediaInfo.originalName} (Type: {currentMediaType})");
             }
         }
 
@@ -732,7 +742,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     private void ClearCurrentMedia()
     {
-        Debug.Log($"{LOG_TAG} ClearCurrentMedia() called");
+        DbgLog($"{LOG_TAG} ClearCurrentMedia() called");
 
         if (currentTexture != null)
         {
@@ -743,7 +753,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (outputRenderTexture != null)
         {
             ClearRenderTexture(outputRenderTexture);
-            Debug.Log($"{LOG_TAG} ✅ RenderTexture cleared");
+            DbgLog($"{LOG_TAG} ✅ RenderTexture cleared");
         }
 
         if (currentMediaName != null)
@@ -764,7 +774,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (apiHasAnyMediaVariable != null)
             apiHasAnyMediaVariable.Value = false;
 
-        Debug.Log($"{LOG_TAG} Current media cleared");
+        DbgLog($"{LOG_TAG} Current media cleared");
         UpdateOverlayInfo();
     }
 
@@ -772,7 +782,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
     {
         if (sourceTexture == null || targetRenderTexture == null)
         {
-            Debug.LogWarning($"{LOG_TAG} Cannot copy to render texture - source or target is null");
+            DbgWarning($"{LOG_TAG} Cannot copy to render texture - source or target is null");
             return;
         }
 
@@ -783,7 +793,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
             if (!targetRenderTexture.IsCreated())
             {
                 targetRenderTexture.Create();
-                Debug.Log($"{LOG_TAG} Created RenderTexture");
+                DbgLog($"{LOG_TAG} Created RenderTexture");
             }
 
             RenderTexture.active = targetRenderTexture;
@@ -793,11 +803,11 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             RenderTexture.active = previousActive;
 
-            Debug.Log($"{LOG_TAG} Successfully copied {sourceTexture.width}x{sourceTexture.height} texture to {targetRenderTexture.width}x{targetRenderTexture.height} RenderTexture using Blit");
+            DbgLog($"{LOG_TAG} Successfully copied {sourceTexture.width}x{sourceTexture.height} texture to {targetRenderTexture.width}x{targetRenderTexture.height} RenderTexture using Blit");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"{LOG_TAG} Failed to copy texture to render texture: {e.Message}");
+            DbgError($"{LOG_TAG} Failed to copy texture to render texture: {e.Message}");
         }
     }
 
@@ -814,13 +824,13 @@ public class DeviceSpecificImageManager : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"{LOG_TAG} Failed to clear render texture: {e.Message}");
+            DbgError($"{LOG_TAG} Failed to clear render texture: {e.Message}");
         }
     }
 
     private void HandleTokenExpired()
     {
-        Debug.Log($"{LOG_TAG} Token expired, logging out...");
+        DbgLog($"{LOG_TAG} Token expired, logging out...");
 
         if (connectionManager?.loginData != null)
         {
@@ -840,7 +850,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         if (deviceIdVariable != null)
         {
             deviceIdVariable.Value = newDeviceId;
-            Debug.Log($"{LOG_TAG} Device ID changed via Unity Atoms to: {newDeviceId}");
+            DbgLog($"{LOG_TAG} Device ID changed via Unity Atoms to: {newDeviceId}");
 
             if (deviceIdDisplay != null)
             {
@@ -849,7 +859,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} Cannot set Device ID - no Unity Atoms StringVariable assigned");
+            DbgWarning($"{LOG_TAG} Cannot set Device ID - no Unity Atoms StringVariable assigned");
         }
     }
 
@@ -899,7 +909,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     void OnDestroy()
     {
-        Debug.Log($"{LOG_TAG} OnDestroy() called");
+        DbgLog($"{LOG_TAG} OnDestroy() called");
         StopDeviceMediaPolling();
 
         if (currentTexture != null)
@@ -916,14 +926,14 @@ public class DeviceSpecificImageManager : MonoBehaviour
     // UI Button Methods
     public void ManualPoll()
     {
-        Debug.Log($"{LOG_TAG} Manual poll triggered");
+        DbgLog($"{LOG_TAG} Manual poll triggered");
         if (isConnected)
         {
             StartCoroutine(CheckForDeviceMedia());
         }
         else
         {
-            Debug.LogWarning($"{LOG_TAG} Cannot manual poll - not connected");
+            DbgWarning($"{LOG_TAG} Cannot manual poll - not connected");
         }
     }
 
@@ -941,7 +951,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
     public void OnAuthenticationRestored()
     {
-        Debug.Log($"{LOG_TAG} Authentication restored, restarting polling");
+        DbgLog($"{LOG_TAG} Authentication restored, restarting polling");
         if (!isPolling && isConnected)
         {
             StartDeviceMediaPolling();
@@ -952,30 +962,30 @@ public class DeviceSpecificImageManager : MonoBehaviour
     [ContextMenu("Debug Token Sources")]
     public void DebugTokenSources()
     {
-        Debug.Log($"{LOG_TAG} === DEVICE SPECIFIC TOKEN SOURCE DEBUG ===");
+        DbgLog($"{LOG_TAG} === DEVICE SPECIFIC TOKEN SOURCE DEBUG ===");
 
         if (connectionManager != null && connectionManager.loginData != null)
         {
-            Debug.Log($"{LOG_TAG} ✅ ScriptableObject: {connectionManager.loginData.UserEmail} (ID: {connectionManager.loginData.UserId})");
-            Debug.Log($"{LOG_TAG}    Token Valid: {connectionManager.loginData.IsTokenValid()}");
+            DbgLog($"{LOG_TAG} ✅ ScriptableObject: {connectionManager.loginData.UserEmail} (ID: {connectionManager.loginData.UserId})");
+            DbgLog($"{LOG_TAG}    Token Valid: {connectionManager.loginData.IsTokenValid()}");
         }
         else
         {
-            Debug.LogError($"{LOG_TAG} ❌ No ScriptableObject available");
+            DbgError($"{LOG_TAG} ❌ No ScriptableObject available");
         }
 
         string authToken1 = PlayerPrefs.GetString("auth_token", "");
         string authToken2 = PlayerPrefs.GetString("AuthToken", "");
-        Debug.Log($"{LOG_TAG} PlayerPrefs 'auth_token': {(authToken1.Length > 0 ? "✅ Available" : "❌ Empty")}");
-        Debug.Log($"{LOG_TAG} PlayerPrefs 'AuthToken': {(authToken2.Length > 0 ? "✅ Available" : "❌ Empty")}");
+        DbgLog($"{LOG_TAG} PlayerPrefs 'auth_token': {(authToken1.Length > 0 ? "✅ Available" : "❌ Empty")}");
+        DbgLog($"{LOG_TAG} PlayerPrefs 'AuthToken': {(authToken2.Length > 0 ? "✅ Available" : "❌ Empty")}");
 
-        Debug.Log($"{LOG_TAG} === DEVICE SPECIFIC TOKEN SOURCE DEBUG END ===");
+        DbgLog($"{LOG_TAG} === DEVICE SPECIFIC TOKEN SOURCE DEBUG END ===");
     }
 
     [ContextMenu("Clear All Tokens")]
     public void ClearAllTokens()
     {
-        Debug.Log($"{LOG_TAG} 🧹 Clearing all authentication tokens...");
+        DbgLog($"{LOG_TAG} 🧹 Clearing all authentication tokens...");
 
         if (connectionManager?.loginData != null)
         {
@@ -987,47 +997,47 @@ public class DeviceSpecificImageManager : MonoBehaviour
         PlayerPrefs.Save();
 
         UpdateStatus("Tokens cleared - please log in", ConnectionState.Disconnected);
-        Debug.Log($"{LOG_TAG} 🧹 All tokens cleared");
+        DbgLog($"{LOG_TAG} 🧹 All tokens cleared");
     }
 
     [ContextMenu("Test Manual Media Request")]
     public void TestManualMediaRequest()
     {
-        Debug.Log($"{LOG_TAG} 🧪 Testing manual device media request...");
+        DbgLog($"{LOG_TAG} 🧪 Testing manual device media request...");
         StartCoroutine(CheckForDeviceMedia());
     }
 
     [ContextMenu("Debug API Media Status")]
     public void DebugAPIMediaStatus()
     {
-        Debug.Log($"{LOG_TAG} === API MEDIA STATUS DEBUG ===");
-        Debug.Log($"{LOG_TAG} API Has Image: {(apiHasImageVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasImageVariable != null ? "✅ Assigned" : "❌ Missing")})");
-        Debug.Log($"{LOG_TAG} API Has Video: {(apiHasVideoVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasVideoVariable != null ? "✅ Assigned" : "❌ Missing")})");
-        Debug.Log($"{LOG_TAG} API Has Any Media: {(apiHasAnyMediaVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasAnyMediaVariable != null ? "✅ Assigned" : "❌ Missing")})");
-        Debug.Log($"{LOG_TAG} Current Media Type: {currentMediaType}");
-        Debug.Log($"{LOG_TAG} Current Media ID: {currentMediaId}");
-        Debug.Log($"{LOG_TAG} === API MEDIA STATUS DEBUG END ===");
+        DbgLog($"{LOG_TAG} === API MEDIA STATUS DEBUG ===");
+        DbgLog($"{LOG_TAG} API Has Image: {(apiHasImageVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasImageVariable != null ? "✅ Assigned" : "❌ Missing")})");
+        DbgLog($"{LOG_TAG} API Has Video: {(apiHasVideoVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasVideoVariable != null ? "✅ Assigned" : "❌ Missing")})");
+        DbgLog($"{LOG_TAG} API Has Any Media: {(apiHasAnyMediaVariable?.Value == true ? "✅ YES" : "❌ NO")} (Variable: {(apiHasAnyMediaVariable != null ? "✅ Assigned" : "❌ Missing")})");
+        DbgLog($"{LOG_TAG} Current Media Type: {currentMediaType}");
+        DbgLog($"{LOG_TAG} Current Media ID: {currentMediaId}");
+        DbgLog($"{LOG_TAG} === API MEDIA STATUS DEBUG END ===");
     }
 
     [ContextMenu("Debug System Status")]
     public void DebugSystemStatus()
     {
-        Debug.Log($"{LOG_TAG} === DEVICE SPECIFIC SYSTEM STATUS DEBUG ===");
-        Debug.Log($"{LOG_TAG} Device ID: '{DeviceId}'");
-        Debug.Log($"{LOG_TAG} RenderTexture: {(outputRenderTexture != null ? "✅ Assigned" : "❌ Missing")}");
-        Debug.Log($"{LOG_TAG} UI Overlay: {(overlayDocument != null ? "✅ Assigned" : "❌ Missing")}");
-        Debug.Log($"{LOG_TAG} Current texture: {(currentTexture != null ? "✅ Loaded" : "❌ None")}");
-        Debug.Log($"{LOG_TAG} Current media ID: {currentMediaId}");
-        Debug.Log($"{LOG_TAG} Current media type: {currentMediaType}");
-        Debug.Log($"{LOG_TAG} Polling: {(isPolling ? "✅ Active" : "❌ Inactive")}");
-        Debug.Log($"{LOG_TAG} Connected: {(isConnected ? "✅ Yes" : "❌ No")}");
-        Debug.Log($"{LOG_TAG} === DEVICE SPECIFIC SYSTEM STATUS DEBUG END ===");
+        DbgLog($"{LOG_TAG} === DEVICE SPECIFIC SYSTEM STATUS DEBUG ===");
+        DbgLog($"{LOG_TAG} Device ID: '{DeviceId}'");
+        DbgLog($"{LOG_TAG} RenderTexture: {(outputRenderTexture != null ? "✅ Assigned" : "❌ Missing")}");
+        DbgLog($"{LOG_TAG} UI Overlay: {(overlayDocument != null ? "✅ Assigned" : "❌ Missing")}");
+        DbgLog($"{LOG_TAG} Current texture: {(currentTexture != null ? "✅ Loaded" : "❌ None")}");
+        DbgLog($"{LOG_TAG} Current media ID: {currentMediaId}");
+        DbgLog($"{LOG_TAG} Current media type: {currentMediaType}");
+        DbgLog($"{LOG_TAG} Polling: {(isPolling ? "✅ Active" : "❌ Inactive")}");
+        DbgLog($"{LOG_TAG} Connected: {(isConnected ? "✅ Yes" : "❌ No")}");
+        DbgLog($"{LOG_TAG} === DEVICE SPECIFIC SYSTEM STATUS DEBUG END ===");
     }
 
     [ContextMenu("Force Device Registration Check")]
     public void ForceDeviceRegistrationCheck()
     {
-        Debug.Log($"{LOG_TAG} 🔧 CHECKING DEVICE REGISTRATION...");
+        DbgLog($"{LOG_TAG} 🔧 CHECKING DEVICE REGISTRATION...");
 
         if (connectionManager != null)
         {
@@ -1041,7 +1051,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"{LOG_TAG} Could not call DebugConnectionState: {e.Message}");
+                DbgWarning($"{LOG_TAG} Could not call DebugConnectionState: {e.Message}");
             }
         }
 

@@ -7,6 +7,35 @@ using UnityAtoms.BaseAtoms;
 
 public class ConnectionManager : MonoBehaviour
 {
+    // =========================
+    // Logging
+    // =========================
+    public enum LogLevel { Error = 0, Warning = 1, Info = 2, Verbose = 3 }
+
+    [Header("Logging")]
+    [Tooltip("Master switch. If false, no logs (including errors) are emitted from this component.")]
+    public bool logsEnabled = true;
+
+    [Tooltip("How chatty logging should be when logs are enabled.")]
+    public LogLevel logLevel = LogLevel.Info;
+
+    void Log(LogLevel level, string message)
+    {
+        if (!logsEnabled) return;
+        if (level > logLevel) return;
+
+        switch (level)
+        {
+            case LogLevel.Error: Debug.LogError(message); break;
+            case LogLevel.Warning: Debug.LogWarning(message); break;
+            default: Debug.Log(message); break;
+        }
+    }
+    void LogError(string msg) => Log(LogLevel.Error, msg);
+    void LogWarn(string msg) => Log(LogLevel.Warning, msg);
+    void LogInfo(string msg) => Log(LogLevel.Info, msg);
+    void LogVerbose(string msg) => Log(LogLevel.Verbose, msg);
+
     [Header("Connection Settings")]
     public string serverURL = "https://unity-server-control-patrykbroda.replit.app";
 
@@ -20,12 +49,8 @@ public class ConnectionManager : MonoBehaviour
     {
         get
         {
-            // Priority: Unity Atoms StringVariable -> Fallback
             if (appIdVariable != null && !string.IsNullOrEmpty(appIdVariable.Value))
-            {
                 return appIdVariable.Value;
-            }
-
             return fallbackAppId;
         }
     }
@@ -60,26 +85,23 @@ public class ConnectionManager : MonoBehaviour
     {
         if (loginData == null)
         {
-            Debug.LogError("UserLoginData ScriptableObject reference is missing!");
+            LogError("UserLoginData ScriptableObject reference is missing!");
             return;
         }
 
-        // Log app ID source and value
         LogAppIdInfo();
-
         ValidateServerURL();
         LogLoginState();
-
         StartLoginStateMonitoring();
 
         if (autoConnect && IsAuthenticated)
         {
-            Debug.Log("User already authenticated, connecting...");
+            LogInfo("User already authenticated, connecting...");
             ConnectToServer();
         }
         else
         {
-            Debug.Log("Please log in first");
+            LogInfo("Please log in first");
         }
 
         wasLoggedIn = IsAuthenticated;
@@ -87,19 +109,19 @@ public class ConnectionManager : MonoBehaviour
 
     void LogAppIdInfo()
     {
-        Debug.Log($"=== APP ID CONFIGURATION ===");
+        LogVerbose("=== APP ID CONFIGURATION ===");
         if (appIdVariable != null)
         {
-            Debug.Log($"✅ Unity Atoms StringVariable found: {appIdVariable.name}");
-            Debug.Log($"   Value: '{appIdVariable.Value}'");
-            Debug.Log($"   Using App ID from Atoms: '{AppId}'");
+            LogVerbose($"Unity Atoms StringVariable found: {appIdVariable.name}");
+            LogVerbose($"Value: '{appIdVariable.Value}'");
+            LogInfo($"Using App ID: '{AppId}'");
         }
         else
         {
-            Debug.LogWarning("⚠️ No Unity Atoms StringVariable assigned for App ID");
-            Debug.Log($"   Using fallback App ID: '{AppId}'");
+            LogWarn("No Unity Atoms StringVariable assigned for App ID");
+            LogInfo($"Using fallback App ID: '{AppId}'");
         }
-        Debug.Log($"=== END APP ID CONFIG ===");
+        LogVerbose("=== END APP ID CONFIG ===");
     }
 
     void ValidateServerURL()
@@ -114,9 +136,8 @@ public class ConnectionManager : MonoBehaviour
     void StartLoginStateMonitoring()
     {
         if (loginCheckCoroutine != null)
-        {
             StopCoroutine(loginCheckCoroutine);
-        }
+
         loginCheckCoroutine = StartCoroutine(MonitorLoginState());
     }
 
@@ -132,27 +153,24 @@ public class ConnectionManager : MonoBehaviour
             {
                 if (currentlyLoggedIn)
                 {
-                    Debug.Log("User login detected, connecting...");
-                    if (autoConnect)
-                    {
-                        ConnectToServer();
-                    }
+                    LogInfo("Login detected, connecting...");
+                    if (autoConnect) ConnectToServer();
                 }
                 else
                 {
-                    Debug.Log("User logout detected, disconnecting...");
+                    LogInfo("Logout detected, disconnecting...");
                     DisconnectFromServer();
-                    Debug.Log("Logged out");
+                    LogInfo("Logged out");
                 }
                 wasLoggedIn = currentlyLoggedIn;
             }
 
             if (currentlyLoggedIn && loginData.IsSessionExpired(sessionTimeoutMinutes))
             {
-                Debug.Log("Session expired, logging out...");
+                LogWarn("Session expired, logging out...");
                 loginData.Logout();
                 DisconnectFromServer();
-                Debug.LogError("Session expired");
+                LogError("Session expired");
             }
         }
     }
@@ -161,15 +179,14 @@ public class ConnectionManager : MonoBehaviour
     {
         if (!IsAuthenticated)
         {
-            Debug.LogError("Cannot connect: User not authenticated");
+            LogError("Cannot connect: User not authenticated");
             LogLoginState();
             return;
         }
 
-        Debug.Log($"Connecting to server: {serverURL}");
-        Debug.Log($"User: {loginData.Username}, Token length: {loginData.AuthToken?.Length ?? 0}");
+        LogInfo($"Connecting to server: {serverURL}");
+        LogVerbose($"User: {loginData.Username}, Token length: {loginData.AuthToken?.Length ?? 0}");
 
-        Debug.Log("Connecting...");
         shouldPoll = true;
         registrationAttempts = 0;
         StartCoroutine(RegisterDevice());
@@ -179,13 +196,13 @@ public class ConnectionManager : MonoBehaviour
     {
         if (isRegistering)
         {
-            Debug.LogWarning("Already registering device, skipping...");
+            LogWarn("Already registering device, skipping...");
             yield break;
         }
 
         if (registrationAttempts >= maxRegistrationAttempts)
         {
-            Debug.LogError($"Max registration attempts reached ({maxRegistrationAttempts})");
+            LogError($"Max registration attempts reached ({maxRegistrationAttempts})");
             OnConnectionError("Device registration failed");
             yield break;
         }
@@ -193,61 +210,42 @@ public class ConnectionManager : MonoBehaviour
         isRegistering = true;
         registrationAttempts++;
 
-        Debug.Log($"=== DEVICE REGISTRATION START (Attempt {registrationAttempts}) ===");
-        Debug.Log($"AppId: '{AppId}'");
-        Debug.Log($"Server URL: '{serverURL}'");
-        Debug.Log($"Full Registration URL: '{serverURL}/api/device/register'");
-        Debug.Log($"User Email: '{loginData.UserEmail}'");
-        Debug.Log($"Username: '{loginData.Username}'");
-        Debug.Log($"User ID: {loginData.UserId}");
-        Debug.Log($"Token Length: {loginData.AuthToken?.Length ?? 0}");
-        Debug.Log($"Token Preview: '{loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...'");
-        Debug.Log($"Is Authenticated: {IsAuthenticated}");
+        LogInfo($"Registering device (attempt {registrationAttempts}/{maxRegistrationAttempts})...");
 
         var registrationData = new RegistrationData
         {
-            appId = AppId, // Using the property that reads from Unity Atoms
+            appId = AppId,
             deviceModel = SystemInfo.deviceModel ?? "Unknown",
             os = SystemInfo.operatingSystem ?? "Unknown",
             timestamp = DateTime.UtcNow.ToString("O")
         };
 
-        string registrationJson = JsonUtility.ToJson(registrationData);
-        Debug.Log($"Registration Data JSON: {registrationJson}");
+        LogVerbose($"Registration JSON: {JsonUtility.ToJson(registrationData)}");
 
-        yield return StartCoroutine(PostAuthenticatedData("/api/device/register", registrationData, (success, response) => {
-            Debug.Log($"=== DEVICE REGISTRATION RESPONSE ===");
-            Debug.Log($"Success: {success}");
-            Debug.Log($"Response: '{response}'");
-            Debug.Log($"Response Length: {response?.Length ?? 0}");
-
+        yield return StartCoroutine(PostAuthenticatedData("/api/device/register", registrationData, (success, response) =>
+        {
             if (success)
             {
-                Debug.Log("✅ Device registration SUCCEEDED!");
-                Debug.Log($"Registration attempt {registrationAttempts} completed successfully");
+                LogInfo("Device registration succeeded");
                 registrationAttempts = 0;
                 OnConnectionSuccess();
             }
             else
             {
-                Debug.LogError($"❌ Device registration FAILED!");
-                Debug.LogError($"Failure on attempt {registrationAttempts}/{maxRegistrationAttempts}");
-                Debug.LogError($"Error details: {response}");
+                LogWarn($"Device registration failed: {Shorten(response)}");
 
-                if (response.Contains("401") || response.Contains("Invalid token"))
+                if (!string.IsNullOrEmpty(response) && (response.Contains("401") || response.Contains("Invalid token")))
                 {
-                    Debug.LogError("Authentication issue detected in registration");
+                    LogError("Authentication issue detected in registration");
                     HandleTokenExpired();
                 }
                 else
                 {
-                    Debug.LogError("Non-auth registration failure");
-                    OnConnectionError($"Registration failed: {response}");
+                    OnConnectionError($"Registration failed: {Shorten(response)}");
                 }
             }
 
             isRegistering = false;
-            Debug.Log($"=== DEVICE REGISTRATION END ===");
         }));
     }
 
@@ -258,9 +256,8 @@ public class ConnectionManager : MonoBehaviour
         registrationAttempts = 0;
 
         loginData.UpdateActivity();
-        Debug.Log("Connected");
+        LogInfo("Connection successful. Starting polling & heartbeat.");
 
-        Debug.Log("✅ Connection successful! Starting polling...");
         StartPolling();
         StartHeartbeat();
     }
@@ -269,11 +266,11 @@ public class ConnectionManager : MonoBehaviour
     {
         isConnected = false;
         isRegistering = false;
-        Debug.LogError($"Error: {error}");
+        LogError($"Error: {error}");
 
         if (autoConnect && shouldPoll && IsAuthenticated && registrationAttempts < maxRegistrationAttempts)
         {
-            Debug.Log($"Retrying connection in 5 seconds... (attempt {registrationAttempts + 1}/{maxRegistrationAttempts})");
+            LogInfo($"Retrying connection in 5s... (next attempt {registrationAttempts + 1}/{maxRegistrationAttempts})");
             StartCoroutine(ReconnectAfterDelay());
         }
     }
@@ -283,7 +280,7 @@ public class ConnectionManager : MonoBehaviour
         yield return new WaitForSeconds(5f);
         if (shouldPoll && !isConnected && IsAuthenticated && registrationAttempts < maxRegistrationAttempts)
         {
-            Debug.Log("Retrying device registration...");
+            LogInfo("Retrying device registration...");
             StartCoroutine(RegisterDevice());
         }
     }
@@ -292,25 +289,21 @@ public class ConnectionManager : MonoBehaviour
     {
         yield return new WaitForSeconds(5f);
         if (shouldPoll && !isConnected && IsAuthenticated)
-        {
             ConnectToServer();
-        }
     }
 
     void StartPolling()
     {
         if (!isConnected)
         {
-            Debug.LogWarning("Cannot start polling: Device not connected/registered");
+            LogWarn("Cannot start polling: not connected/registered");
             return;
         }
 
         if (pollCoroutine != null)
-        {
             StopCoroutine(pollCoroutine);
-        }
 
-        Debug.Log("Starting command polling...");
+        LogInfo("Starting command polling...");
         pollCoroutine = StartCoroutine(PollForCommands());
     }
 
@@ -325,51 +318,33 @@ public class ConnectionManager : MonoBehaviour
                 loginData.UpdateActivity();
 
                 string pollUrl = $"/api/device/{AppId}/commands?lastId={lastCommandId}";
-                string fullPollUrl = serverURL + pollUrl;
+                LogVerbose($"Polling {pollUrl}");
 
-                Debug.Log($"=== POLLING FOR COMMANDS ===");
-                Debug.Log($"AppId: '{AppId}'");
-                Debug.Log($"Poll URL: '{pollUrl}'");
-                Debug.Log($"Full Poll URL: '{fullPollUrl}'");
-                Debug.Log($"Last Command ID: {lastCommandId}");
-                Debug.Log($"User Email: '{loginData.UserEmail}'");
-                Debug.Log($"User ID: {loginData.UserId}");
-                Debug.Log($"Token Length: {loginData.AuthToken?.Length ?? 0}");
-                Debug.Log($"Token Preview: '{loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...'");
-
-                yield return StartCoroutine(GetAuthenticatedData(pollUrl, (success, response) => {
-                    Debug.Log($"=== POLLING RESPONSE ===");
-                    Debug.Log($"Success: {success}");
-                    Debug.Log($"Response: '{response}'");
-                    Debug.Log($"Response Length: {response?.Length ?? 0}");
-
+                yield return StartCoroutine(GetAuthenticatedData(pollUrl, (success, response) =>
+                {
                     if (success)
                     {
-                        Debug.Log("✅ Polling SUCCEEDED!");
                         ProcessCommands(response);
                     }
                     else
                     {
-                        Debug.LogWarning($"❌ Polling FAILED: {response}");
-
-                        if (response.Contains("401") || response.Contains("Invalid token"))
+                        if (!string.IsNullOrEmpty(response) && (response.Contains("401") || response.Contains("Invalid token")))
                         {
-                            Debug.LogError("Authentication token issue detected in polling");
+                            LogError("Auth token issue detected in polling");
                             HandleTokenExpired();
                             return;
                         }
 
-                        if (response.Contains("403") && response.Contains("Device not found"))
+                        if (!string.IsNullOrEmpty(response) && response.Contains("403") && response.Contains("Device not found"))
                         {
-                            Debug.LogWarning("Device not found error detected in polling");
+                            LogWarn("Device not found during polling. Re-registering...");
                             HandleDeviceNotFound();
                             return;
                         }
 
-                        Debug.LogError("Other polling error detected");
-                        OnConnectionError($"Polling failed: {response}");
+                        LogWarn($"Polling failed: {Shorten(response)}");
+                        OnConnectionError($"Polling failed: {Shorten(response)}");
                     }
-                    Debug.Log($"=== POLLING END ===");
                 }));
             }
         }
@@ -377,35 +352,23 @@ public class ConnectionManager : MonoBehaviour
 
     void HandleDeviceNotFound()
     {
-        Debug.Log($"=== HANDLING DEVICE NOT FOUND ===");
-        Debug.Log($"Current state - isRegistering: {isRegistering}, registrationAttempts: {registrationAttempts}");
+        LogVerbose("=== HANDLING DEVICE NOT FOUND ===");
 
         if (isRegistering)
         {
-            Debug.LogWarning("Already handling device not found (registration in progress), skipping...");
+            LogWarn("Already handling device-not-found (registration in progress), skipping...");
             return;
         }
 
-        Debug.Log("Device not found on server, attempting re-registration...");
-        Debug.Log($"AppId being used: '{AppId}'");
-        Debug.Log($"User info: {loginData.Username} (ID: {loginData.UserId})");
-
         if (pollCoroutine != null)
         {
-            Debug.Log("Stopping current polling coroutine...");
             StopCoroutine(pollCoroutine);
             pollCoroutine = null;
         }
 
         isConnected = false;
-        Debug.Log("Re-registering device...");
-
-        Debug.Log($"Resetting registration attempts (was: {registrationAttempts})");
         registrationAttempts = 0;
-
-        Debug.Log("Starting device registration process...");
         StartCoroutine(RegisterDevice());
-        Debug.Log($"=== DEVICE NOT FOUND HANDLING END ===");
     }
 
     void ProcessCommands(string jsonResponse)
@@ -421,17 +384,22 @@ public class ConnectionManager : MonoBehaviour
                     ProcessCommand(command);
                     lastCommandId = Math.Max(lastCommandId, command.id);
                 }
+                LogInfo($"Processed {response.commands.Length} command(s). LastId={lastCommandId}");
+            }
+            else
+            {
+                LogVerbose("No new commands.");
             }
         }
         catch (Exception e)
         {
-            Debug.LogError($"Failed to process commands: {e.Message}");
+            LogError($"Failed to process commands: {e.Message}");
         }
     }
 
     void ProcessCommand(Command command)
     {
-        Debug.Log($"Processing command: {command.type} - {command.data}");
+        LogInfo($"Command: {command.type}");
         loginData.UpdateActivity();
 
         switch (command.type?.ToLower())
@@ -441,7 +409,7 @@ public class ConnectionManager : MonoBehaviour
                 break;
 
             default:
-                Debug.LogWarning($"Unknown command: {command.type}");
+                LogWarn($"Unknown command: {command.type}");
                 SendCommandResponse(command.id, "error", "Unknown command");
                 break;
         }
@@ -452,26 +420,24 @@ public class ConnectionManager : MonoBehaviour
         var responseData = new CommandResponseData
         {
             commandId = commandId,
-            appId = AppId, // Using the property that reads from Unity Atoms
+            appId = AppId,
             status = status,
             message = message,
             timestamp = DateTime.UtcNow.ToString("O")
         };
 
-        StartCoroutine(PostAuthenticatedData("/api/device/response", responseData, (success, response) => {
+        StartCoroutine(PostAuthenticatedData("/api/device/response", responseData, (success, response) =>
+        {
             if (!success)
-            {
-                Debug.LogWarning($"Failed to send command response: {response}");
-            }
+                LogWarn($"Failed to send command response: {Shorten(response)}");
         }));
     }
 
     void StartHeartbeat()
     {
         if (heartbeatCoroutine != null)
-        {
             StopCoroutine(heartbeatCoroutine);
-        }
+
         heartbeatCoroutine = StartCoroutine(HeartbeatCoroutine());
     }
 
@@ -485,22 +451,22 @@ public class ConnectionManager : MonoBehaviour
             {
                 var heartbeatData = new HeartbeatData
                 {
-                    appId = AppId, // Using the property that reads from Unity Atoms
+                    appId = AppId,
                     timestamp = DateTime.UtcNow.ToString("O")
                 };
 
-                yield return StartCoroutine(PostAuthenticatedData("/api/device/heartbeat", heartbeatData, (success, response) => {
+                yield return StartCoroutine(PostAuthenticatedData("/api/device/heartbeat", heartbeatData, (success, response) =>
+                {
                     if (!success)
                     {
-                        Debug.LogWarning($"Heartbeat failed: {response}");
-                        if (response.Contains("401") || response.Contains("Invalid token"))
-                        {
+                        LogWarn($"Heartbeat failed: {Shorten(response)}");
+                        if (!string.IsNullOrEmpty(response) && (response.Contains("401") || response.Contains("Invalid token")))
                             HandleTokenExpired();
-                        }
                     }
                     else
                     {
                         loginData.UpdateActivity();
+                        LogVerbose("Heartbeat OK");
                     }
                 }));
             }
@@ -509,7 +475,7 @@ public class ConnectionManager : MonoBehaviour
 
     void HandleTokenExpired()
     {
-        Debug.Log("Token expired, logging out...");
+        LogInfo("Token expired, logging out...");
         loginData.Logout();
         OnConnectionError("Authentication expired - please log in again");
     }
@@ -518,7 +484,7 @@ public class ConnectionManager : MonoBehaviour
     {
         if (!IsAuthenticated)
         {
-            Debug.LogError("POST REQUEST FAILED: Not authenticated");
+            LogError("POST failed: Not authenticated");
             LogLoginState();
             callback(false, "Not authenticated");
             yield break;
@@ -527,12 +493,8 @@ public class ConnectionManager : MonoBehaviour
         string json = JsonUtility.ToJson(data);
         string fullUrl = serverURL + endpoint;
 
-        Debug.Log($"=== POST REQUEST START ===");
-        Debug.Log($"Endpoint: '{endpoint}'");
-        Debug.Log($"Full URL: '{fullUrl}'");
-        Debug.Log($"JSON Data: '{json}'");
-        Debug.Log($"Token Length: {loginData.AuthToken?.Length ?? 0}");
-        Debug.Log($"Token Preview: '{loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...'");
+        LogVerbose($"POST {endpoint}");
+        LogVerbose($"JSON: {json}");
 
         using (UnityWebRequest request = new UnityWebRequest(fullUrl, "POST"))
         {
@@ -542,32 +504,19 @@ public class ConnectionManager : MonoBehaviour
             request.SetRequestHeader("Content-Type", "application/json");
             request.SetRequestHeader("Authorization", "Bearer " + loginData.AuthToken);
 
-            Debug.Log($"Request Headers Set:");
-            Debug.Log($"  Content-Type: application/json");
-            Debug.Log($"  Authorization: Bearer {loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...");
-
-            Debug.Log($"Sending POST request to: {fullUrl}");
             yield return request.SendWebRequest();
-
-            Debug.Log($"=== POST REQUEST RESPONSE ===");
-            Debug.Log($"Response Code: {request.responseCode}");
-            Debug.Log($"Response Text: '{request.downloadHandler.text}'");
-            Debug.Log($"Request Error: '{request.error}'");
-            Debug.Log($"Request Result: {request.result}");
 
             if (request.result == UnityWebRequest.Result.Success)
             {
-                Debug.Log("✅ POST Request SUCCESS");
+                LogVerbose($"POST {endpoint} OK ({request.responseCode})");
                 callback(true, request.downloadHandler.text);
             }
             else
             {
-                Debug.LogError("❌ POST Request FAILED");
                 string errorResponse = $"HTTP/{request.responseCode} {request.error} - {request.downloadHandler.text}";
-                Debug.LogError($"Error Response: {errorResponse}");
+                LogWarn($"POST {endpoint} failed: {Shorten(errorResponse)}");
                 callback(false, errorResponse);
             }
-            Debug.Log($"=== POST REQUEST END ===");
         }
     }
 
@@ -575,7 +524,7 @@ public class ConnectionManager : MonoBehaviour
     {
         if (!IsAuthenticated)
         {
-            Debug.LogError("GET REQUEST FAILED: Not authenticated");
+            LogError("GET failed: Not authenticated");
             LogLoginState();
             callback(false, "Not authenticated");
             yield break;
@@ -583,41 +532,25 @@ public class ConnectionManager : MonoBehaviour
 
         string fullUrl = serverURL + endpoint;
 
-        Debug.Log($"=== GET REQUEST START ===");
-        Debug.Log($"Endpoint: '{endpoint}'");
-        Debug.Log($"Full URL: '{fullUrl}'");
-        Debug.Log($"Token Length: {loginData.AuthToken?.Length ?? 0}");
-        Debug.Log($"Token Preview: '{loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...'");
+        LogVerbose($"GET {endpoint}");
 
         using (UnityWebRequest request = UnityWebRequest.Get(fullUrl))
         {
             request.SetRequestHeader("Authorization", "Bearer " + loginData.AuthToken);
 
-            Debug.Log($"Request Headers Set:");
-            Debug.Log($"  Authorization: Bearer {loginData.AuthToken?.Substring(0, Math.Min(50, loginData.AuthToken?.Length ?? 0))}...");
-
-            Debug.Log($"Sending GET request to: {fullUrl}");
             yield return request.SendWebRequest();
-
-            Debug.Log($"=== GET REQUEST RESPONSE ===");
-            Debug.Log($"Response Code: {request.responseCode}");
-            Debug.Log($"Response Text: '{request.downloadHandler.text}'");
-            Debug.Log($"Request Error: '{request.error}'");
-            Debug.Log($"Request Result: {request.result}");
 
             if (request.result == UnityWebRequest.Result.Success)
             {
-                Debug.Log("✅ GET Request SUCCESS");
+                LogVerbose($"GET {endpoint} OK ({request.responseCode})");
                 callback(true, request.downloadHandler.text);
             }
             else
             {
-                Debug.LogError("❌ GET Request FAILED");
                 string errorResponse = $"HTTP/{request.responseCode} {request.error} - {request.downloadHandler.text}";
-                Debug.LogError($"Error Response: {errorResponse}");
+                LogWarn($"GET {endpoint} failed: {Shorten(errorResponse)}");
                 callback(false, errorResponse);
             }
-            Debug.Log($"=== GET REQUEST END ===");
         }
     }
 
@@ -639,125 +572,90 @@ public class ConnectionManager : MonoBehaviour
             heartbeatCoroutine = null;
         }
 
-        Debug.Log("Disconnected");
+        LogInfo("Disconnected");
     }
 
     public void Logout()
     {
         DisconnectFromServer();
         if (loginData != null)
-        {
             loginData.Logout();
-        }
-        Debug.Log("Logged out");
+
+        LogInfo("Logged out");
     }
 
     void LogLoginState()
     {
-        Debug.Log($"=== LOGIN STATE DEBUG ===");
+        LogVerbose("=== LOGIN STATE DEBUG ===");
+
         if (loginData == null)
         {
-            Debug.LogError("❌ LoginData ScriptableObject is NULL!");
+            LogError("LoginData ScriptableObject is NULL!");
             return;
         }
 
-        Debug.Log($"ScriptableObject Reference: {loginData.name}");
-        Debug.Log($"Username: '{loginData.Username}'");
-        Debug.Log($"Email: '{loginData.UserEmail}'");
-        Debug.Log($"User ID: {loginData.UserId}");
-        Debug.Log($"Display Name: '{loginData.DisplayName}'");
-        Debug.Log($"Is Logged In: {loginData.IsLoggedIn}");
-        Debug.Log($"Remember Me: {loginData.RememberMe}");
-        Debug.Log($"Login Time: {loginData.LoginTime}");
-        Debug.Log($"Last Activity: {loginData.LastActivity}");
-        Debug.Log($"Auth Token Length: {loginData.AuthToken?.Length ?? 0}");
-        Debug.Log($"Auth Token Valid: {loginData.IsTokenValid()}");
-        Debug.Log($"Session Expired: {loginData.IsSessionExpired(sessionTimeoutMinutes)}");
-        Debug.Log($"Overall IsAuthenticated: {IsAuthenticated}");
+        LogVerbose($"SO: {loginData.name}");
+        LogVerbose($"Username: '{loginData.Username}'  Email: '{loginData.UserEmail}'  UserId: {loginData.UserId}");
+        LogVerbose($"IsLoggedIn: {loginData.IsLoggedIn}  RememberMe: {loginData.RememberMe}");
+        LogVerbose($"AuthTokenLength: {loginData.AuthToken?.Length ?? 0}  TokenValid: {loginData.IsTokenValid()}  SessionExpired: {loginData.IsSessionExpired(sessionTimeoutMinutes)}");
 
+        // Token payload decode moved to Verbose only
         if (!string.IsNullOrEmpty(loginData.AuthToken))
         {
-            Debug.Log($"Token Preview: '{loginData.AuthToken.Substring(0, Math.Min(100, loginData.AuthToken.Length))}...'");
-
             try
             {
                 string[] tokenParts = loginData.AuthToken.Split('.');
                 if (tokenParts.Length >= 2)
                 {
                     string payload = tokenParts[1];
-                    while (payload.Length % 4 != 0)
-                    {
-                        payload += "=";
-                    }
-
-                    byte[] jsonBytes = System.Convert.FromBase64String(payload);
-                    string jsonString = System.Text.Encoding.UTF8.GetString(jsonBytes);
-                    Debug.Log($"Token Payload: {jsonString}");
+                    while (payload.Length % 4 != 0) payload += "=";
+                    byte[] jsonBytes = Convert.FromBase64String(payload);
+                    string jsonString = Encoding.UTF8.GetString(jsonBytes);
+                    LogVerbose($"Token Payload: {jsonString}");
                 }
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
-                Debug.LogWarning($"Could not decode token payload: {e.Message}");
+                LogVerbose($"Could not decode token payload: {e.Message}");
             }
         }
         else
         {
-            Debug.LogError("❌ Auth Token is NULL or EMPTY!");
+            LogVerbose("Auth Token is empty.");
         }
-        Debug.Log($"=== LOGIN STATE DEBUG END ===");
+
+        LogVerbose("=== LOGIN STATE DEBUG END ===");
     }
 
     [ContextMenu("Debug Connection State")]
     public void DebugConnectionState()
     {
-        Debug.Log($"=======================================");
-        Debug.Log($"FULL CONNECTION STATE DEBUG");
-        Debug.Log($"=======================================");
-
+        LogInfo("=== FULL CONNECTION STATE DEBUG ===");
         LogLoginState();
         LogAppIdInfo();
 
-        Debug.Log($"=== CONNECTION MANAGER STATE ===");
-        Debug.Log($"Server URL: '{serverURL}'");
-        Debug.Log($"App ID: '{AppId}'");
-        Debug.Log($"Is Connected: {isConnected}");
-        Debug.Log($"Should Poll: {shouldPoll}");
-        Debug.Log($"Is Registering: {isRegistering}");
-        Debug.Log($"Registration Attempts: {registrationAttempts}");
-        Debug.Log($"Max Registration Attempts: {maxRegistrationAttempts}");
-        Debug.Log($"Last Command ID: {lastCommandId}");
-        Debug.Log($"Auto Connect: {autoConnect}");
-        Debug.Log($"Poll Interval: {pollInterval}");
-        Debug.Log($"Heartbeat Interval: {heartbeatInterval}");
-        Debug.Log($"Session Timeout Minutes: {sessionTimeoutMinutes}");
-        Debug.Log($"Was Logged In: {wasLoggedIn}");
-
-        Debug.Log($"=== COROUTINE STATE ===");
-        Debug.Log($"Poll Coroutine Active: {pollCoroutine != null}");
-        Debug.Log($"Heartbeat Coroutine Active: {heartbeatCoroutine != null}");
-        Debug.Log($"Login Check Coroutine Active: {loginCheckCoroutine != null}");
-
-        Debug.Log($"=======================================");
-        Debug.Log($"FULL CONNECTION STATE DEBUG END");
-        Debug.Log($"=======================================");
+        LogInfo($"Server URL: '{serverURL}'  App ID: '{AppId}'");
+        LogInfo($"IsConnected: {isConnected}  ShouldPoll: {shouldPoll}  IsRegistering: {isRegistering}");
+        LogInfo($"Registration Attempts: {registrationAttempts}/{maxRegistrationAttempts}  LastCommandId: {lastCommandId}");
+        LogInfo($"AutoConnect: {autoConnect}  PollInterval: {pollInterval}  HeartbeatInterval: {heartbeatInterval}");
+        LogInfo($"SessionTimeoutMinutes: {sessionTimeoutMinutes}  WasLoggedIn: {wasLoggedIn}");
+        LogInfo($"Coroutines -> Poll:{(pollCoroutine != null)} Heartbeat:{(heartbeatCoroutine != null)} LoginCheck:{(loginCheckCoroutine != null)}");
+        LogInfo("=== END CONNECTION STATE DEBUG ===");
     }
 
     [ContextMenu("Force Device Registration")]
     public void ForceDeviceRegistration()
     {
-        Debug.Log("🔧 MANUALLY FORCING DEVICE REGISTRATION");
-        DebugConnectionState();
+        LogInfo("Manually forcing device registration...");
 
         if (!IsAuthenticated)
         {
-            Debug.LogError("Cannot force registration: User not authenticated");
+            LogError("Cannot force registration: User not authenticated");
             return;
         }
 
         isRegistering = false;
         registrationAttempts = 0;
-
-        Debug.Log("Manual registration...");
         StartCoroutine(RegisterDevice());
     }
 
@@ -767,21 +665,26 @@ public class ConnectionManager : MonoBehaviour
         if (appIdVariable != null)
         {
             appIdVariable.Value = newAppId;
-            Debug.Log($"App ID changed via Unity Atoms to: {newAppId}");
+            LogInfo($"App ID changed via Unity Atoms to: {newAppId}");
         }
         else
         {
-            Debug.LogWarning("Cannot set App ID - no Unity Atoms StringVariable assigned");
+            LogWarn("Cannot set App ID - no Unity Atoms StringVariable assigned");
         }
+    }
+
+    [ContextMenu("Toggle Logs")]
+    public void ToggleLogs()
+    {
+        logsEnabled = !logsEnabled;
+        Debug.Log($"[ConnectionManager] LogsEnabled set to: {logsEnabled}");
     }
 
     void OnDestroy()
     {
         DisconnectFromServer();
         if (loginCheckCoroutine != null)
-        {
             StopCoroutine(loginCheckCoroutine);
-        }
     }
 
     void OnApplicationPause(bool pauseStatus)
@@ -789,10 +692,12 @@ public class ConnectionManager : MonoBehaviour
         if (pauseStatus)
         {
             shouldPoll = false;
+            LogVerbose("App paused: polling stopped");
         }
         else if (autoConnect && IsAuthenticated)
         {
             shouldPoll = true;
+            LogVerbose("App resumed: reconnecting");
             ConnectToServer();
         }
     }
@@ -800,6 +705,13 @@ public class ConnectionManager : MonoBehaviour
     void OnApplicationQuit()
     {
         DisconnectFromServer();
+    }
+
+    // Utility to trim long responses in logs
+    string Shorten(string s, int max = 240)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s.Length <= max ? s : s.Substring(0, max) + "…";
     }
 }
 

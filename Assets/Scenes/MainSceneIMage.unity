@@ -689,7 +689,6 @@ GameObject:
   - component: {fileID: 1087598040}
   - component: {fileID: 1087598044}
   - component: {fileID: 1087598045}
-  - component: {fileID: 1087598046}
   m_Layer: 5
   m_Name: UI
   m_TagString: Untagged
@@ -728,6 +727,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59e3db609e77484f944ccc1e3a68d4c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  logsEnabled: 0
+  logLevel: 2
   serverURL: https://unity-server-control-patrykbroda.replit.app
   appIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
   fallbackAppId: unity-app-001
@@ -771,7 +772,7 @@ MonoBehaviour:
   overlayDocument: {fileID: 1087598041}
   outputRenderTexture: {fileID: 8400000, guid: 2334595e214575b4fbc2131b0b26baf8, type: 2}
   deviceIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
-  pollingInterval: 2
+  pollingInterval: 5
   serverURL: https://unity-server-control-patrykbroda.replit.app
   connectionManager: {fileID: 1087598040}
   apiHasImageVariable: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
@@ -790,45 +791,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   videoPlayer: {fileID: 2045092413}
-  overlayDocument: {fileID: 1087598041}
   deviceIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
-  pollingInterval: 2
+  pollingInterval: 5
   serverURL: https://unity-server-control-patrykbroda.replit.app
+  enableCaching: 1
+  maxCacheSizeMB: 5000
+  autoCleanCache: 1
+  downloadTimeoutSeconds: 600
   connectionManager: {fileID: 1087598040}
   apiHasImageVariable: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
   apiHasVideoVariable: {fileID: 11400000, guid: 350ce6d24ba896e4fb00b403c2539304, type: 2}
   apiHasAnyMediaVariable: {fileID: 11400000, guid: f41abd28a5f24184d92022788acc3428, type: 2}
---- !u!114 &1087598046
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1087598037}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 35518878d6823e644a6d462a15bd07fd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  videoManager: {fileID: 1087598045}
-  imageManager: {fileID: 1087598044}
-  videoPlayer: {fileID: 2045092413}
-  videoRenderTexture: {fileID: 8400000, guid: 829beb3ce3d87c94c8632751fad00d01, type: 2}
-  imageRenderTexture: {fileID: 8400000, guid: 2334595e214575b4fbc2131b0b26baf8, type: 2}
-  targetCamera: {fileID: 330585545}
-  autoDetectDeviceType: 1
-  autoAdjustForOrientation: 1
-  dynamicRenderTextures: 1
-  maintainAspectRatio: 1
-  screenChangeDelay: 0.5
-  forcedVideoFitMode: 0
-  forcedImageFitMode: 0
-  useHighQualityScaling: 1
-  textureFilterMode: 1
-  maxRenderTextureSize: 2048
-  enableAntiAliasing: 1
-  showDebugInfo: 0
-  debugUI: {fileID: 1087598041}
 --- !u!1 &1428530918
 GameObject:
   m_ObjectHideFlags: 0
