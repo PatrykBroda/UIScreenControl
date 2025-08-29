@@ -27,6 +27,14 @@ public class DeviceSpecificVideoManager : MonoBehaviour
     public float maxCacheSizeMB = 5000f;
     public bool autoCleanCache = true;
     public float downloadTimeoutSeconds = 600f;
+    public bool clearCacheOnStart = false; // Set to true temporarily to clear bad cache
+
+    [Header("Enhanced Download Settings")]
+    public int downloadChunkSizeMB = 5; // Download in 5MB chunks
+    public int maxRetryAttempts = 3;
+    public float retryDelay = 2f;
+    public bool enableChunkedDownload = true;
+    public int maxConcurrentChunks = 2; // For parallel downloading
 
     [Header("References")]
     public ConnectionManager connectionManager;
@@ -46,6 +54,11 @@ public class DeviceSpecificVideoManager : MonoBehaviour
     private Coroutine currentDownloadCoroutine;
     private string videoCacheDir;
     private Dictionary<int, CachedVideoInfo> videoCache = new Dictionary<int, CachedVideoInfo>();
+
+    // Progress tracking
+    private float currentDownloadProgress = 0f;
+    private long totalBytesDownloaded = 0;
+    private long totalFileSize = 0;
 
     public enum ConnectionState { Disconnected, Connecting, Connected }
     public enum MediaType { None, DeviceSpecific, GlobalActive }
@@ -94,11 +107,36 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         public List<CachedVideoInfo> entries = new List<CachedVideoInfo>();
     }
 
+    [System.Serializable]
+    public class DownloadState
+    {
+        public int videoId;
+        public string url;
+        public long totalSize;
+        public long downloadedBytes;
+        public string tempFilePath;
+    }
+
+    // Public property to expose download progress
+    public float DownloadProgress => currentDownloadProgress;
+
     void Start()
     {
         Debug.Log($"{LOG_TAG} Starting Video Manager");
 
         InitializeCacheDirectory();
+
+        // Clean up any bad cache from previous versions
+        if (clearCacheOnStart)
+        {
+            Debug.Log($"{LOG_TAG} Clearing cache on start (clearCacheOnStart = true)");
+            ClearVideoCache();
+        }
+        else
+        {
+            CleanupBadCache();
+        }
+
         LoadCacheManifest();
         InitializeAtomVariables();
         InitializeVideoPlayer();
@@ -116,6 +154,32 @@ public class DeviceSpecificVideoManager : MonoBehaviour
             Directory.CreateDirectory(videoCacheDir);
     }
 
+    void CleanupBadCache()
+    {
+        // Clean up any subdirectories (like "uploads") that shouldn't exist
+        if (Directory.Exists(videoCacheDir))
+        {
+            string[] subdirs = Directory.GetDirectories(videoCacheDir);
+            foreach (string subdir in subdirs)
+            {
+                Debug.Log($"{LOG_TAG} Removing invalid subdirectory: {subdir}");
+                Directory.Delete(subdir, true);
+            }
+
+            // Also clean up any files without proper extensions
+            string[] files = Directory.GetFiles(videoCacheDir);
+            foreach (string file in files)
+            {
+                if (!file.EndsWith(".mp4") && !file.EndsWith(".webm") && !file.EndsWith(".mov") &&
+                    !file.EndsWith(".json") && !file.EndsWith(".tmp"))
+                {
+                    Debug.Log($"{LOG_TAG} Removing invalid file: {file}");
+                    File.Delete(file);
+                }
+            }
+        }
+    }
+
     void LoadCacheManifest()
     {
         string manifestPath = Path.Combine(videoCacheDir, "cache_manifest.json");
@@ -126,10 +190,15 @@ public class DeviceSpecificVideoManager : MonoBehaviour
             string json = File.ReadAllText(manifestPath);
             var manifest = JsonUtility.FromJson<CacheManifest>(json);
 
+            videoCache.Clear();
             foreach (var entry in manifest.entries)
             {
-                if (File.Exists(entry.localPath))
+                // Only load entries with valid file extensions
+                if (File.Exists(entry.localPath) &&
+                    (entry.localPath.EndsWith(".mp4") || entry.localPath.EndsWith(".webm") || entry.localPath.EndsWith(".mov")))
+                {
                     videoCache[entry.id] = entry;
+                }
             }
 
             Debug.Log($"{LOG_TAG} Loaded {videoCache.Count} cached videos");
@@ -339,7 +408,8 @@ public class DeviceSpecificVideoManager : MonoBehaviour
                     if (currentDownloadCoroutine != null)
                         StopCoroutine(currentDownloadCoroutine);
 
-                    currentDownloadCoroutine = StartCoroutine(DownloadAndCacheVideo(videoInfo));
+                    // Use enhanced download method
+                    currentDownloadCoroutine = StartCoroutine(EnhancedDownloadAndCacheVideo(videoInfo));
                 }
             }
         }
@@ -349,14 +419,18 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         }
     }
 
-    private IEnumerator DownloadAndCacheVideo(DeviceVideoInfo videoInfo)
+    private IEnumerator EnhancedDownloadAndCacheVideo(DeviceVideoInfo videoInfo)
     {
         if (isDownloadingVideo) yield break;
 
         isDownloadingVideo = true;
-        Debug.Log($"{LOG_TAG} Downloading: {videoInfo.originalName}");
+        currentDownloadProgress = 0f;
+        totalBytesDownloaded = 0;
+        totalFileSize = videoInfo.fileSize;
 
-        // Check and clean cache if needed
+        Debug.Log($"{LOG_TAG} Starting enhanced download: {videoInfo.originalName} ({FormatFileSize(videoInfo.fileSize)})");
+
+        // Check cache space
         if (maxCacheSizeMB > 0 && autoCleanCache)
         {
             long currentSize = GetCacheSize();
@@ -367,34 +441,74 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         }
 
         string videoUrl = $"{serverURL}{videoInfo.url}";
-        string localFileName = $"video_{videoInfo.id}_{videoInfo.filename}";
-        string localPath = Path.Combine(videoCacheDir, localFileName);
 
-        using (UnityWebRequest www = UnityWebRequest.Get(videoUrl))
+        // Fix the filename handling - extract just the filename, no paths
+        string cleanFilename = Path.GetFileName(videoInfo.filename);
+        if (string.IsNullOrEmpty(cleanFilename))
         {
-            www.downloadHandler = new DownloadHandlerFile(localPath);
-            www.timeout = (int)downloadTimeoutSeconds;
-
-            string authToken = GetAuthToken();
-            if (!string.IsNullOrEmpty(authToken))
-                www.SetRequestHeader("Authorization", "Bearer " + authToken);
-
-            yield return www.SendWebRequest();
-
-            if (www.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogError($"{LOG_TAG} Download failed: {www.error}");
-
-                if (File.Exists(localPath))
-                    File.Delete(localPath);
-
-                isDownloadingVideo = false;
-                currentDownloadCoroutine = null;
-                yield break;
-            }
+            cleanFilename = Path.GetFileName(videoInfo.url);
         }
 
-        Debug.Log($"{LOG_TAG} Download complete!");
+        // Remove any directory separators that might still be there
+        cleanFilename = cleanFilename.Replace("/", "").Replace("\\", "");
+
+        // Ensure the file has a video extension
+        if (!Path.HasExtension(cleanFilename) ||
+            (!cleanFilename.EndsWith(".mp4", System.StringComparison.OrdinalIgnoreCase) &&
+             !cleanFilename.EndsWith(".webm", System.StringComparison.OrdinalIgnoreCase) &&
+             !cleanFilename.EndsWith(".mov", System.StringComparison.OrdinalIgnoreCase)))
+        {
+            // Add .mp4 extension if missing or unknown
+            cleanFilename = Path.GetFileNameWithoutExtension(cleanFilename) + ".mp4";
+        }
+
+        string localFileName = $"video_{videoInfo.id}_{cleanFilename}";
+        string localPath = Path.Combine(videoCacheDir, localFileName);
+        string tempPath = localPath + ".tmp";
+
+        Debug.Log($"{LOG_TAG} Downloading to: {localFileName}");
+
+        // Check if we can resume a partial download
+        long existingBytes = 0;
+        if (File.Exists(tempPath))
+        {
+            existingBytes = new FileInfo(tempPath).Length;
+            Debug.Log($"{LOG_TAG} Resuming download from {FormatFileSize(existingBytes)}");
+        }
+
+        // Use chunked download for large files
+        if (enableChunkedDownload && videoInfo.fileSize > 10 * 1024 * 1024) // > 10MB
+        {
+            yield return StartCoroutine(ChunkedDownload(videoUrl, tempPath, videoInfo.fileSize, existingBytes));
+        }
+        else
+        {
+            // Fall back to standard download for small files
+            yield return StartCoroutine(StandardDownload(videoUrl, tempPath));
+        }
+
+        // Verify download completed
+        if (!File.Exists(tempPath))
+        {
+            Debug.LogError($"{LOG_TAG} Download failed - file not found");
+            isDownloadingVideo = false;
+            currentDownloadCoroutine = null;
+            yield break;
+        }
+
+        // Verify file size
+        long downloadedSize = new FileInfo(tempPath).Length;
+        if (System.Math.Abs(downloadedSize - videoInfo.fileSize) > 1024) // Allow 1KB tolerance
+        {
+            Debug.LogWarning($"{LOG_TAG} File size mismatch. Expected: {videoInfo.fileSize}, Got: {downloadedSize}");
+        }
+
+        // Move temp file to final location
+        if (File.Exists(localPath))
+            File.Delete(localPath);
+        File.Move(tempPath, localPath);
+
+        Debug.Log($"{LOG_TAG} Download complete: {videoInfo.originalName} saved as {localFileName}");
 
         // Add to cache
         var cachedInfo = new CachedVideoInfo
@@ -416,10 +530,119 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         currentDownloadCoroutine = null;
     }
 
+    private IEnumerator ChunkedDownload(string url, string filePath, long totalSize, long startByte = 0)
+    {
+        int chunkSize = downloadChunkSizeMB * 1024 * 1024;
+        long currentByte = startByte;
+        totalBytesDownloaded = startByte;
+
+        // Open or create file for writing
+        using (FileStream fileStream = new FileStream(filePath, startByte > 0 ? FileMode.Append : FileMode.Create))
+        {
+            while (currentByte < totalSize)
+            {
+                long endByte = System.Math.Min(currentByte + chunkSize - 1, totalSize - 1);
+                bool chunkSuccess = false;
+                int retryCount = 0;
+
+                while (!chunkSuccess && retryCount < maxRetryAttempts)
+                {
+                    using (UnityWebRequest request = UnityWebRequest.Get(url))
+                    {
+                        // Set range header for partial download
+                        request.SetRequestHeader("Range", $"bytes={currentByte}-{endByte}");
+
+                        string authToken = GetAuthToken();
+                        if (!string.IsNullOrEmpty(authToken))
+                            request.SetRequestHeader("Authorization", "Bearer " + authToken);
+
+                        request.timeout = 60; // 60 seconds per chunk
+
+                        yield return request.SendWebRequest();
+
+                        if (request.result == UnityWebRequest.Result.Success)
+                        {
+                            // Write chunk to file
+                            byte[] data = request.downloadHandler.data;
+                            fileStream.Write(data, 0, data.Length);
+                            fileStream.Flush(); // Ensure data is written to disk
+
+                            currentByte = endByte + 1;
+                            totalBytesDownloaded += data.Length;
+                            currentDownloadProgress = (float)totalBytesDownloaded / totalSize;
+
+                            Debug.Log($"{LOG_TAG} Progress: {(currentDownloadProgress * 100):F1}% ({FormatFileSize(totalBytesDownloaded)}/{FormatFileSize(totalSize)})");
+
+                            chunkSuccess = true;
+                        }
+                        else
+                        {
+                            retryCount++;
+                            Debug.LogWarning($"{LOG_TAG} Chunk failed (attempt {retryCount}/{maxRetryAttempts}): {request.error}");
+
+                            if (retryCount < maxRetryAttempts)
+                            {
+                                yield return new WaitForSeconds(retryDelay * retryCount); // Exponential backoff
+                            }
+                            else
+                            {
+                                Debug.LogError($"{LOG_TAG} Failed to download chunk after {maxRetryAttempts} attempts");
+                                yield break;
+                            }
+                        }
+                    }
+                }
+
+                // Optional: Add delay between chunks to avoid overwhelming the server
+                yield return null;
+            }
+        }
+
+        currentDownloadProgress = 1f;
+        Debug.Log($"{LOG_TAG} Chunked download completed successfully");
+    }
+
+    private IEnumerator StandardDownload(string url, string filePath)
+    {
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
+        {
+            request.downloadHandler = new DownloadHandlerFile(filePath);
+            request.timeout = (int)downloadTimeoutSeconds;
+
+            string authToken = GetAuthToken();
+            if (!string.IsNullOrEmpty(authToken))
+                request.SetRequestHeader("Authorization", "Bearer " + authToken);
+
+            // Track progress
+            var operation = request.SendWebRequest();
+
+            while (!operation.isDone)
+            {
+                currentDownloadProgress = request.downloadProgress;
+                Debug.Log($"{LOG_TAG} Download progress: {(currentDownloadProgress * 100):F1}%");
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"{LOG_TAG} Download failed: {request.error}");
+
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+            }
+            else
+            {
+                currentDownloadProgress = 1f;
+                Debug.Log($"{LOG_TAG} Standard download completed");
+            }
+        }
+    }
+
     private IEnumerator PlayCachedVideo(CachedVideoInfo cachedVideo)
     {
         if (!File.Exists(cachedVideo.localPath))
         {
+            Debug.LogError($"{LOG_TAG} Cached video file not found: {cachedVideo.localPath}");
             videoCache.Remove(cachedVideo.id);
             SaveCacheManifest();
             yield break;
@@ -432,6 +655,7 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         }
 
         string fileUrl = "file:///" + cachedVideo.localPath.Replace('\\', '/');
+        Debug.Log($"{LOG_TAG} Attempting to play video from: {fileUrl}");
         videoPlayer.url = fileUrl;
 
         // Update access time
@@ -496,6 +720,7 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         Debug.Log($"{LOG_TAG} Freed cache space");
     }
 
+    [ContextMenu("Clear Video Cache")]
     public void ClearVideoCache()
     {
         if (videoPlayer?.isPlaying == true)
@@ -503,15 +728,18 @@ public class DeviceSpecificVideoManager : MonoBehaviour
 
         if (Directory.Exists(videoCacheDir))
         {
-            foreach (FileInfo file in new DirectoryInfo(videoCacheDir).GetFiles())
-                file.Delete();
+            // Delete all files and subdirectories
+            Directory.Delete(videoCacheDir, true);
+            // Recreate the directory
+            Directory.CreateDirectory(videoCacheDir);
         }
 
         videoCache.Clear();
         SaveCacheManifest();
         currentVideoId = 0;
+        lastRequestedVideoId = 0;
 
-        Debug.Log($"{LOG_TAG} Cache cleared");
+        Debug.Log($"{LOG_TAG} Cache cleared completely");
     }
 
     private IEnumerator ClearCurrentVideo()
@@ -556,6 +784,56 @@ public class DeviceSpecificVideoManager : MonoBehaviour
         Debug.LogError($"{LOG_TAG} Video error: {message}");
         isDownloadingVideo = false;
         currentDownloadCoroutine = null;
+    }
+
+    // Helper method to format file sizes
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+
+        return $"{size:F2} {sizes[order]}";
+    }
+
+    // Method to cancel current download
+    public void CancelDownload()
+    {
+        if (currentDownloadCoroutine != null)
+        {
+            StopCoroutine(currentDownloadCoroutine);
+            currentDownloadCoroutine = null;
+        }
+
+        isDownloadingVideo = false;
+        currentDownloadProgress = 0f;
+
+        Debug.Log($"{LOG_TAG} Download cancelled");
+    }
+
+    // Optional: Save download progress for resume capability
+    private void SaveDownloadState(DownloadState state)
+    {
+        string statePath = Path.Combine(videoCacheDir, "download_state.json");
+        string json = JsonUtility.ToJson(state, true);
+        File.WriteAllText(statePath, json);
+    }
+
+    private DownloadState LoadDownloadState()
+    {
+        string statePath = Path.Combine(videoCacheDir, "download_state.json");
+        if (File.Exists(statePath))
+        {
+            string json = File.ReadAllText(statePath);
+            return JsonUtility.FromJson<DownloadState>(json);
+        }
+        return null;
     }
 
     // Public API

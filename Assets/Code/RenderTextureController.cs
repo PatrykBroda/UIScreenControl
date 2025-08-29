@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityAtoms.BaseAtoms;
 
 /// <summary>
@@ -34,7 +34,7 @@ public class RenderTextureController : MonoBehaviour
     [Header("Display Control Variables (CONTROLLED BY THIS SCRIPT)")]
     [SerializeField] private BoolVariable displayImageActive; // Controls actual image display
     [SerializeField] private BoolVariable displayVideoActive; // Controls actual video display
-    [SerializeField] private BoolVariable displayAnyActive; // Controls any display
+    [SerializeField] private BoolVariable displayAnyActive;   // Controls any display
 
     // Internal state tracking
     private bool currentImageDisplayState = false;
@@ -80,7 +80,7 @@ public class RenderTextureController : MonoBehaviour
         // Initialize display control variables
         InitializeDisplayVariables();
 
-        // Set initial state
+        // Set initial state from API (exclusive)
         UpdateDisplayState();
         hasInitialized = true;
 
@@ -128,71 +128,210 @@ public class RenderTextureController : MonoBehaviour
             apiHasAnyMediaVariable.Changed.Unregister(OnApiAnyMediaStatusChanged);
     }
 
-    // API Status Change Handlers (these respond to external API changes)
-    private void OnApiImageStatusChanged(bool hasImageFromApi)
+    // ===== Mutual-Exclusivity Core =====
+    private void ApplyExclusiveDisplayFromApi()
     {
-        DebugLog($"API Image Status Changed: {hasImageFromApi}");
+        bool apiImage = GetApiImageStatus();
+        bool apiVideo = GetApiVideoStatus();
 
-        if (hasImageFromApi)
+        // Only Video
+        if (apiVideo && !apiImage)
         {
-            // API reports image is available - request to activate image display
-            RequestImageActivation();
+            lastRequestedVideoState = true;
+            lastRequestedImageState = false;
+
+            if (!currentVideoDisplayState) SetVideoDisplayState(true);
+            if (currentImageDisplayState) SetImageDisplayState(false);
+            return;
         }
-        else if (maintainLastActiveState)
+
+        // Only Image
+        if (apiImage && !apiVideo)
         {
-            // API reports no image, but we maintain last state unless video takes over
-            DebugLog("API reports no image, but maintaining last state if no video is active");
-            if (!GetApiVideoStatus())
+            lastRequestedImageState = true;
+            lastRequestedVideoState = false;
+
+            if (!currentImageDisplayState) SetImageDisplayState(true);
+            if (currentVideoDisplayState) SetVideoDisplayState(false);
+            return;
+        }
+
+        // Both present → respect priority
+        if (apiImage && apiVideo)
+        {
+            if (videoPriority)
             {
-                // No video either, so we can maintain current image state if it was active
-                // Don't automatically deactivate
+                lastRequestedVideoState = true;
+                lastRequestedImageState = false;
+
+                if (!currentVideoDisplayState) SetVideoDisplayState(true);
+                if (currentImageDisplayState) SetImageDisplayState(false);
             }
+            else
+            {
+                lastRequestedImageState = true;
+                lastRequestedVideoState = false;
+
+                if (!currentImageDisplayState) SetImageDisplayState(true);
+                if (currentVideoDisplayState) SetVideoDisplayState(false);
+            }
+            return;
+        }
+
+        // None present
+        if (!maintainLastActiveState)
+        {
+            RequestDeactivateAll(); // keeps exactly one active (defaults to image)
         }
         else
         {
-            // Immediate deactivation when API reports no image
-            RequestImageDeactivation();
-        }
-    }
-
-    private void OnApiVideoStatusChanged(bool hasVideoFromApi)
-    {
-        DebugLog($"API Video Status Changed: {hasVideoFromApi}");
-
-        if (hasVideoFromApi)
-        {
-            // API reports video is available - request to activate video display
-            RequestVideoActivation();
-        }
-        else if (maintainLastActiveState)
-        {
-            // API reports no video, but we maintain last state unless image takes over
-            DebugLog("API reports no video, but maintaining last state if no image is active");
-            if (!GetApiImageStatus())
+            // Maintain whatever is currently active; still ensure only one is active
+            if (currentImageDisplayState && currentVideoDisplayState)
             {
-                // No image either, so we can maintain current video state if it was active
-                // Don't automatically deactivate
+                if (videoPriority) SetImageDisplayState(false);
+                else SetVideoDisplayState(false);
+            }
+            else if (!currentImageDisplayState && !currentVideoDisplayState)
+            {
+                // pick last requested or default to image
+                if (lastRequestedVideoState) SetVideoDisplayState(true);
+                else SetImageDisplayState(true);
             }
         }
-        else
-        {
-            // Immediate deactivation when API reports no video
-            RequestVideoDeactivation();
-        }
+
+        UpdateAnyActiveState();
     }
 
-    private void OnApiAnyMediaStatusChanged(bool hasAnyMediaFromApi)
+    // API Status Change Handlers → Always delegate to exclusivity rule
+    private void OnApiImageStatusChanged(bool _)
     {
-        DebugLog($"API Any Media Status Changed: {hasAnyMediaFromApi}");
-
-        if (!hasAnyMediaFromApi && !maintainLastActiveState)
-        {
-            // API reports no media at all and we don't maintain state - deactivate everything
-            RequestDeactivateAll();
-        }
+        DebugLog($"API Image Status Changed: {GetApiImageStatus()}");
+        ApplyExclusiveDisplayFromApi();
     }
 
-    // Request Methods (these handle the logic for what should be displayed)
+    private void OnApiVideoStatusChanged(bool _)
+    {
+        DebugLog($"API Video Status Changed: {GetApiVideoStatus()}");
+        ApplyExclusiveDisplayFromApi();
+    }
+
+    private void OnApiAnyMediaStatusChanged(bool _)
+    {
+        DebugLog($"API Any Media Status Changed: {GetApiAnyStatus()}");
+        ApplyExclusiveDisplayFromApi();
+    }
+
+    // Core State Management Methods
+    private void SetImageDisplayState(bool active)
+    {
+        if (currentImageDisplayState == active)
+            return; // No change needed
+
+        // Debounce
+        if (Time.time - lastStateChangeTime < STATE_CHANGE_DEBOUNCE)
+        {
+            DebugLog("SetImageDisplayState debounced");
+            return;
+        }
+
+        currentImageDisplayState = active;
+        lastStateChangeTime = Time.time;
+
+        // Update the display control variable
+        if (displayImageActive != null)
+            displayImageActive.Value = active;
+
+        // Update GameObjects
+        SetGameObjectActive(imageRenderTextureObject, active);
+
+        if (active)
+        {
+            FitRenderTextureToCanvas(imageRenderTextureObject);
+        }
+
+        UpdateAnyActiveState();
+        DebugLog($"Image display state set to: {active}");
+    }
+
+    private void SetVideoDisplayState(bool active)
+    {
+        if (currentVideoDisplayState == active)
+            return; // No change needed
+
+        // Debounce
+        if (Time.time - lastStateChangeTime < STATE_CHANGE_DEBOUNCE)
+        {
+            DebugLog("SetVideoDisplayState debounced");
+            return;
+        }
+
+        currentVideoDisplayState = active;
+        lastStateChangeTime = Time.time;
+
+        // Update the display control variable
+        if (displayVideoActive != null)
+            displayVideoActive.Value = active;
+
+        // Update GameObjects
+        SetGameObjectActive(videoRenderTextureObject, active);
+
+        if (active)
+        {
+            FitRenderTextureToCanvas(videoRenderTextureObject);
+        }
+
+        UpdateAnyActiveState();
+        DebugLog($"Video display state set to: {active}");
+    }
+
+    private void UpdateAnyActiveState()
+    {
+        bool anyActive = currentImageDisplayState || currentVideoDisplayState;
+
+        // ENFORCE: Always keep at least one active - if both are trying to be false, keep the last one that was true
+        if (!anyActive)
+        {
+            if (lastRequestedImageState && !lastRequestedVideoState)
+            {
+                DebugLog("Enforcing: Keeping image active as it was the last requested");
+                currentImageDisplayState = true;
+                if (displayImageActive != null) displayImageActive.Value = true;
+                SetGameObjectActive(imageRenderTextureObject, true);
+                anyActive = true;
+            }
+            else if (lastRequestedVideoState && !lastRequestedImageState)
+            {
+                DebugLog("Enforcing: Keeping video active as it was the last requested");
+                currentVideoDisplayState = true;
+                if (displayVideoActive != null) displayVideoActive.Value = true;
+                SetGameObjectActive(videoRenderTextureObject, true);
+                anyActive = true;
+            }
+            else
+            {
+                // Default to image if no clear preference
+                DebugLog("Enforcing: Defaulting to image active (no clear last state)");
+                currentImageDisplayState = true;
+                lastRequestedImageState = true;
+                if (displayImageActive != null) displayImageActive.Value = true;
+                SetGameObjectActive(imageRenderTextureObject, true);
+                anyActive = true;
+            }
+        }
+
+        if (displayAnyActive != null)
+            displayAnyActive.Value = anyActive;
+
+        DebugLog($"Any active state updated to: {anyActive} (Image: {currentImageDisplayState}, Video: {currentVideoDisplayState})");
+    }
+
+    private void UpdateDisplayState()
+    {
+        // Reconcile API status with display state using exclusive rule
+        ApplyExclusiveDisplayFromApi();
+    }
+
+    // Request Methods (kept for external calls; exclusivity is enforced in ApplyExclusiveDisplayFromApi)
     private void RequestImageActivation()
     {
         if (Time.time - lastStateChangeTime < STATE_CHANGE_DEBOUNCE)
@@ -204,7 +343,6 @@ public class RenderTextureController : MonoBehaviour
         DebugLog("Requesting image activation");
         lastRequestedImageState = true;
 
-        // Check for conflicts
         if (currentVideoDisplayState)
         {
             if (videoPriority)
@@ -233,7 +371,6 @@ public class RenderTextureController : MonoBehaviour
         DebugLog("Requesting video activation");
         lastRequestedVideoState = true;
 
-        // Check for conflicts
         if (currentImageDisplayState)
         {
             if (videoPriority)
@@ -306,133 +443,6 @@ public class RenderTextureController : MonoBehaviour
             SetImageDisplayState(true);
             lastRequestedImageState = true;
         }
-    }
-
-    // Core State Management Methods
-    private void SetImageDisplayState(bool active)
-    {
-        if (currentImageDisplayState == active)
-            return; // No change needed
-
-        currentImageDisplayState = active;
-        lastStateChangeTime = Time.time;
-
-        // Update the display control variable
-        if (displayImageActive != null)
-            displayImageActive.Value = active;
-
-        // Update GameObjects
-        SetGameObjectActive(imageRenderTextureObject, active);
-
-        if (active)
-        {
-            FitRenderTextureToCanvas(imageRenderTextureObject);
-        }
-
-        UpdateAnyActiveState();
-        DebugLog($"Image display state set to: {active}");
-    }
-
-    private void SetVideoDisplayState(bool active)
-    {
-        if (currentVideoDisplayState == active)
-            return; // No change needed
-
-        currentVideoDisplayState = active;
-        lastStateChangeTime = Time.time;
-
-        // Update the display control variable
-        if (displayVideoActive != null)
-            displayVideoActive.Value = active;
-
-        // Update GameObjects
-        SetGameObjectActive(videoRenderTextureObject, active);
-
-        if (active)
-        {
-            FitRenderTextureToCanvas(videoRenderTextureObject);
-        }
-
-        UpdateAnyActiveState();
-        DebugLog($"Video display state set to: {active}");
-    }
-
-    private void UpdateAnyActiveState()
-    {
-        bool anyActive = currentImageDisplayState || currentVideoDisplayState;
-
-        // ENFORCE: Always keep at least one active - if both are trying to be false, keep the last one that was true
-        if (!anyActive)
-        {
-            if (lastRequestedImageState && !lastRequestedVideoState)
-            {
-                DebugLog("Enforcing: Keeping image active as it was the last requested");
-                currentImageDisplayState = true;
-                if (displayImageActive != null) displayImageActive.Value = true;
-                SetGameObjectActive(imageRenderTextureObject, true);
-                anyActive = true;
-            }
-            else if (lastRequestedVideoState && !lastRequestedImageState)
-            {
-                DebugLog("Enforcing: Keeping video active as it was the last requested");
-                currentVideoDisplayState = true;
-                if (displayVideoActive != null) displayVideoActive.Value = true;
-                SetGameObjectActive(videoRenderTextureObject, true);
-                anyActive = true;
-            }
-            else
-            {
-                // Default to image if no clear preference
-                DebugLog("Enforcing: Defaulting to image active (no clear last state)");
-                currentImageDisplayState = true;
-                lastRequestedImageState = true;
-                if (displayImageActive != null) displayImageActive.Value = true;
-                SetGameObjectActive(imageRenderTextureObject, true);
-                anyActive = true;
-            }
-        }
-
-        if (displayAnyActive != null)
-            displayAnyActive.Value = anyActive;
-
-        DebugLog($"Any active state updated to: {anyActive} (Image: {currentImageDisplayState}, Video: {currentVideoDisplayState})");
-    }
-
-    private void UpdateDisplayState()
-    {
-        // This method reconciles API status with display state
-        bool apiHasImage = GetApiImageStatus();
-        bool apiHasVideo = GetApiVideoStatus();
-        bool apiHasAny = GetApiAnyStatus();
-
-        DebugLog($"UpdateDisplayState - API Status: Image={apiHasImage}, Video={apiHasVideo}, Any={apiHasAny}");
-
-        if (apiHasVideo && apiHasImage)
-        {
-            // Both available - apply priority
-            if (videoPriority)
-            {
-                RequestVideoActivation();
-            }
-            else
-            {
-                RequestImageActivation();
-            }
-        }
-        else if (apiHasVideo)
-        {
-            RequestVideoActivation();
-        }
-        else if (apiHasImage)
-        {
-            RequestImageActivation();
-        }
-        else if (!maintainLastActiveState)
-        {
-            // No media available and not maintaining state
-            RequestDeactivateAll();
-        }
-        // If maintainLastActiveState is true and no API media, we keep current state
     }
 
     // Helper Methods
@@ -641,13 +651,21 @@ public class RenderTextureController : MonoBehaviour
     public void ForceActivateImage()
     {
         DebugLog("Force activating image");
-        RequestImageActivation();
+        // enforce exclusivity
+        SetVideoDisplayState(false);
+        SetImageDisplayState(true);
+        lastRequestedImageState = true;
+        lastRequestedVideoState = false;
     }
 
     public void ForceActivateVideo()
     {
         DebugLog("Force activating video");
-        RequestVideoActivation();
+        // enforce exclusivity
+        SetImageDisplayState(false);
+        SetVideoDisplayState(true);
+        lastRequestedVideoState = true;
+        lastRequestedImageState = false;
     }
 
     public void ForceDeactivateAll()

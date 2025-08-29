@@ -568,7 +568,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &981662579
 RectTransform:
   m_ObjectHideFlags: 0
@@ -769,6 +769,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 691fe316404a6944b8ec1947300e44f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  enableLogs: 1
   overlayDocument: {fileID: 1087598041}
   outputRenderTexture: {fileID: 8400000, guid: 2334595e214575b4fbc2131b0b26baf8, type: 2}
   deviceIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
@@ -792,12 +793,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   videoPlayer: {fileID: 2045092413}
   deviceIdVariable: {fileID: 11400000, guid: 121369369e6d73a4da437a0f842b0505, type: 2}
-  pollingInterval: 5
+  pollingInterval: 2
   serverURL: https://unity-server-control-patrykbroda.replit.app
   enableCaching: 1
   maxCacheSizeMB: 5000
   autoCleanCache: 1
   downloadTimeoutSeconds: 600
+  clearCacheOnStart: 0
+  downloadChunkSizeMB: 5
+  maxRetryAttempts: 3
+  retryDelay: 2
+  enableChunkedDownload: 1
+  maxConcurrentChunks: 2
   connectionManager: {fileID: 1087598040}
   apiHasImageVariable: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
   apiHasVideoVariable: {fileID: 11400000, guid: 350ce6d24ba896e4fb00b403c2539304, type: 2}
@@ -1241,28 +1248,14 @@ MonoBehaviour:
   useAnchorStretching: 0
   forceOverrideLayout: 1
   videoPriority: 1
-  enableMutualExclusionWarnings: 1
-  isAnyActive: {fileID: 11400000, guid: f41abd28a5f24184d92022788acc3428, type: 2}
-  isImageActive: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
-  isVideoActive: {fileID: 11400000, guid: 350ce6d24ba896e4fb00b403c2539304, type: 2}
-  isAnyActiveRef:
-    _usage: 0
-    _value: 0
-    _constant: {fileID: 0}
-    _variable: {fileID: 0}
-    _variableInstancer: {fileID: 0}
-  isImageActiveRef:
-    _usage: 0
-    _value: 0
-    _constant: {fileID: 0}
-    _variable: {fileID: 0}
-    _variableInstancer: {fileID: 0}
-  isVideoActiveRef:
-    _usage: 0
-    _value: 0
-    _constant: {fileID: 0}
-    _variable: {fileID: 0}
-    _variableInstancer: {fileID: 0}
+  enableDebugLogs: 1
+  maintainLastActiveState: 1
+  apiHasImageVariable: {fileID: 11400000, guid: abc6d335796ee154da909f6d1264d9ce, type: 2}
+  apiHasVideoVariable: {fileID: 11400000, guid: 350ce6d24ba896e4fb00b403c2539304, type: 2}
+  apiHasAnyMediaVariable: {fileID: 11400000, guid: f41abd28a5f24184d92022788acc3428, type: 2}
+  displayImageActive: {fileID: 0}
+  displayVideoActive: {fileID: 0}
+  displayAnyActive: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

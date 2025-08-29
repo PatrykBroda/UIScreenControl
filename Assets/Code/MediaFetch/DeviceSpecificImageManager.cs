@@ -55,6 +55,15 @@ public class DeviceSpecificImageManager : MonoBehaviour
     [Tooltip("Unity Atoms BoolVariable - Shows if the API response contains any media at all")]
     public BoolVariable apiHasAnyMediaVariable;
 
+    // ===== Sticky media kind state =====
+    private enum ActiveMediaKind { None, Image, Video }
+
+    [Header("Sticky Media Flags")]
+    [Tooltip("Keep image flag ON unless a video is explicitly active.")]
+    [SerializeField] private bool stickyImageUntilVideo = true;
+
+    [SerializeField] private ActiveMediaKind currentActiveKind = ActiveMediaKind.None;
+
     // UI Elements
     private Label statusText;
     private Label serverUrl;
@@ -330,7 +339,7 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
         if (lastUpdateTime != null)
         {
-            lastUpdateTime.text = $"Last Update: {System.DateTime.Now.ToString("HH:mm:ss")}";
+            lastUpdateTime.text = $"Last Update: {System.DateTime.Now:HH:mm:ss}";
         }
 
         if (mediaTypeIndicator != null)
@@ -385,11 +394,11 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
             if (connectedProperty != null && authenticatedProperty != null)
             {
-                bool isConnected = (bool)connectedProperty.GetValue(connectionManager);
-                bool isAuthenticated = (bool)authenticatedProperty.GetValue(connectionManager);
+                bool connected = (bool)connectedProperty.GetValue(connectionManager);
+                bool authenticated = (bool)authenticatedProperty.GetValue(connectionManager);
 
-                DbgLog($"{LOG_TAG} Connection status - Connected: {isConnected}, Authenticated: {isAuthenticated}");
-                return isConnected && isAuthenticated;
+                DbgLog($"{LOG_TAG} Connection status - Connected: {connected}, Authenticated: {authenticated}");
+                return connected && authenticated;
             }
         }
         catch (System.Exception e)
@@ -521,6 +530,52 @@ public class DeviceSpecificImageManager : MonoBehaviour
         return authToken;
     }
 
+    // ===== Sticky helpers =====
+    private void SetAtom(BoolVariable v, bool val)
+    {
+        if (v != null) v.Value = val;
+    }
+
+    private void UpdateApiFlags(bool sawImageThisPoll, bool sawVideoThisPoll, bool forceClear = false)
+    {
+        if (forceClear)
+        {
+            currentActiveKind = ActiveMediaKind.None;
+            SetAtom(apiHasImageVariable, false);
+            SetAtom(apiHasVideoVariable, false);
+            SetAtom(apiHasAnyMediaVariable, false);
+            DbgLog($"{LOG_TAG} Flags cleared (force).");
+            return;
+        }
+
+        // Precedence: video wins over image
+        if (sawVideoThisPoll)
+        {
+            currentActiveKind = ActiveMediaKind.Video;
+        }
+        else if (sawImageThisPoll)
+        {
+            currentActiveKind = ActiveMediaKind.Image;
+        }
+        else
+        {
+            // No positive assertion this poll → stick to last known (if sticky), else drop to None
+            if (!stickyImageUntilVideo)
+            {
+                currentActiveKind = ActiveMediaKind.None;
+            }
+        }
+
+        bool imageActive = (currentActiveKind == ActiveMediaKind.Image);
+        bool videoActive = (currentActiveKind == ActiveMediaKind.Video);
+        SetAtom(apiHasImageVariable, imageActive);
+        SetAtom(apiHasVideoVariable, videoActive);
+        SetAtom(apiHasAnyMediaVariable, imageActive || videoActive);
+
+        DbgLog($"{LOG_TAG} StickyFlags => Kind:{currentActiveKind}, Image:{imageActive}, Video:{videoActive}, Any:{imageActive || videoActive}");
+    }
+    // ==========================
+
     private IEnumerator ProcessDeviceMediaResponse(string rawResponse)
     {
         DbgLog($"{LOG_TAG} RAW SERVER RESPONSE: {rawResponse}");
@@ -562,21 +617,9 @@ public class DeviceSpecificImageManager : MonoBehaviour
             yield break;
         }
 
-        // Update API status indicators for inspector visibility
+        // Observations from this poll
         bool hasImageInResponse = response.media?.image != null && response.media.image.id > 0;
         bool hasVideoInResponse = response.media?.video != null && response.media.video.id > 0;
-
-        // Update Unity Atoms BoolVariables
-        if (apiHasImageVariable != null)
-            apiHasImageVariable.Value = hasImageInResponse;
-
-        if (apiHasVideoVariable != null)
-            apiHasVideoVariable.Value = hasVideoInResponse;
-
-        if (apiHasAnyMediaVariable != null)
-            apiHasAnyMediaVariable.Value = hasImageInResponse || hasVideoInResponse;
-
-        DbgLog($"{LOG_TAG} API Media Status - Image: {(hasImageInResponse ? "✅" : "❌")}, Video: {(hasVideoInResponse ? "✅" : "❌")}, Any: {(hasImageInResponse || hasVideoInResponse ? "✅" : "❌")}");
 
         // Validate user ID
         int expectedUserId = 0;
@@ -617,16 +660,34 @@ public class DeviceSpecificImageManager : MonoBehaviour
         }
         else
         {
-            // If no mediaType specified, assume device-specific since we're polling device endpoint
             DbgLog($"{LOG_TAG} No mediaType in response, assuming device-specific");
             newMediaType = MediaType.DeviceSpecific;
         }
 
         DbgLog($"{LOG_TAG} Detected media type: {newMediaType}");
 
-        bool hasMedia = response.media?.image != null && response.media.image.id > 0;
+        // Sticky flags first (so UI stays stable even if we early-exit)
+        UpdateApiFlags(hasImageInResponse, hasVideoInResponse);
 
-        if (hasMedia)
+        // VIDEO PRECEDENCE
+        if (hasVideoInResponse && response.media.video != null)
+        {
+            currentMediaType = newMediaType;
+            currentMediaId = response.media.video.id;
+
+            string typeDisplay = currentMediaType == MediaType.DeviceSpecific ? "Device-Specific" :
+                                 currentMediaType == MediaType.GlobalActive ? "Global Active" : "Unknown";
+
+            if (currentMediaName != null)
+                currentMediaName.text = response.media.video.originalName ?? $"Video #{currentMediaId}";
+
+            UpdateStatus($"Playing video: {currentMediaName?.text}", ConnectionState.Connected);
+            UpdateOverlayInfo();
+            yield break; // Don’t process image when video is active
+        }
+
+        // IMAGE HANDLING
+        if (hasImageInResponse)
         {
             DeviceMediaInfo mediaInfo = response.media.image;
 
@@ -650,26 +711,14 @@ public class DeviceSpecificImageManager : MonoBehaviour
                     _ => "Unknown"
                 };
 
-                UpdateStatus($"Current: {mediaInfo.originalName} ({typeDisplay})", ConnectionState.Connected);
+                UpdateStatus($"Current: {response.media.image.originalName} ({typeDisplay})", ConnectionState.Connected);
             }
         }
         else
         {
-            DbgLog($"{LOG_TAG} ❌ No media detected");
-            UpdateStatus("No media assigned", ConnectionState.Connected);
-
-            if (currentMediaName != null)
-            {
-                currentMediaName.text = "No media";
-            }
-
-            currentMediaType = MediaType.None;
-
-            if (currentMediaId > 0)
-            {
-                DbgLog($"{LOG_TAG} Clearing previous media");
-                ClearCurrentMedia();
-            }
+            // No positive assertion this poll — keep previous state; DO NOT clear or flip flags
+            DbgLog($"{LOG_TAG} ❌ No media detected this poll — keeping previous state.");
+            UpdateStatus("No media change (keeping previous)", ConnectionState.Connected);
         }
 
         UpdateOverlayInfo();
@@ -732,6 +781,9 @@ public class DeviceSpecificImageManager : MonoBehaviour
                     currentMediaName.text = mediaInfo.originalName;
                 }
 
+                // Ensure flags reflect that image is currently active (sticky)
+                UpdateApiFlags(true, false);
+
                 UpdateStatus($"Displaying: {mediaInfo.originalName} ({typeDisplay})", ConnectionState.Connected);
                 DbgLog($"{LOG_TAG} Successfully loaded and displayed media: {mediaInfo.originalName} (Type: {currentMediaType})");
             }
@@ -764,15 +816,8 @@ public class DeviceSpecificImageManager : MonoBehaviour
         currentMediaId = 0;
         currentMediaType = MediaType.None;
 
-        // Reset Unity Atoms BoolVariables
-        if (apiHasImageVariable != null)
-            apiHasImageVariable.Value = false;
-
-        if (apiHasVideoVariable != null)
-            apiHasVideoVariable.Value = false;
-
-        if (apiHasAnyMediaVariable != null)
-            apiHasAnyMediaVariable.Value = false;
+        // Reset Atoms via sticky helper
+        UpdateApiFlags(false, false, forceClear: true);
 
         DbgLog($"{LOG_TAG} Current media cleared");
         UpdateOverlayInfo();
@@ -998,6 +1043,9 @@ public class DeviceSpecificImageManager : MonoBehaviour
 
         UpdateStatus("Tokens cleared - please log in", ConnectionState.Disconnected);
         DbgLog($"{LOG_TAG} 🧹 All tokens cleared");
+
+        // Also clear sticky flags when user explicitly clears tokens
+        UpdateApiFlags(false, false, forceClear: true);
     }
 
     [ContextMenu("Test Manual Media Request")]
