@@ -1,5 +1,4 @@
-
-using System;
+﻿using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
@@ -30,20 +29,54 @@ public class VolumeManager : MonoBehaviour
     public bool IsAuthenticated =>
         loginData != null && loginData.IsLoggedIn && loginData.IsTokenValid() && !loginData.IsSessionExpired(30);
 
+    [Header("Volume Control Options")]
+    [Tooltip("Control Unity AudioListener volume")]
+    public bool controlUnityVolume = true;
+    [Tooltip("Control Android system volume (requires Android)")]
+    public bool controlSystemVolume = true;
+    [Tooltip("Android audio stream type")]
+    public AndroidVolumeStreamType streamType = AndroidVolumeStreamType.Music;
+
     [Header("Polling")]
     public bool autoPollVolume = true;
-    public float pollIntervalSeconds = 120f; // 2 minutes
+
+    [Tooltip("How often to poll the server for volume (seconds).")]
+    [Range(1f, 300f)]
+    public float pollIntervalSeconds = 7f;
 
     [Header("Events")]
-    public UnityEvent<int> onVolumeChanged; // subscribe in Inspector or via code
+    public UnityEvent<int> onVolumeChanged;
 
+    [Header("Debug / State")]
+    [Tooltip("The most recent volume value fetched or set.")]
+    public int currentVolume = -1;
+
+    // Android volume control
+    private AndroidJavaObject audioManager;
+    private AndroidJavaObject unityActivity;
+    private int maxSystemVolume = 100;
+
+    // Volume polling
     private Coroutine volumePollCoroutine;
     private int lastVolumeValue = -1;
 
+    public enum AndroidVolumeStreamType
+    {
+        Music = 3,          // STREAM_MUSIC - most common for apps
+        Ring = 2,           // STREAM_RING
+        Notification = 5,   // STREAM_NOTIFICATION
+        System = 1,         // STREAM_SYSTEM
+        VoiceCall = 0,      // STREAM_VOICE_CALL
+        Alarm = 4           // STREAM_ALARM
+    }
+
     void Awake()
     {
+        // Initialize Android volume control
+        InitializeAndroidVolumeControl();
+
         // Hook: automatically apply volume when changed
-        onVolumeChanged.AddListener(ApplyDeviceVolume);
+        onVolumeChanged.AddListener(ApplyVolume);
     }
 
     void Start()
@@ -61,6 +94,34 @@ public class VolumeManager : MonoBehaviour
     void OnDisable()
     {
         StopVolumePolling();
+    }
+
+    private void InitializeAndroidVolumeControl()
+    {
+        if (!Application.isEditor && Application.platform == RuntimePlatform.Android && controlSystemVolume)
+        {
+            try
+            {
+                // Get the Unity activity
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                {
+                    unityActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                }
+
+                // Get the AudioManager
+                audioManager = unityActivity.Call<AndroidJavaObject>("getSystemService", "audio");
+
+                // Get max volume for the stream type
+                maxSystemVolume = audioManager.Call<int>("getStreamMaxVolume", (int)streamType);
+
+                Debug.Log($"[VOLUME] Android AudioManager initialized. Max volume: {maxSystemVolume} for stream type: {streamType}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[VOLUME] Failed to initialize Android volume control: {ex.Message}");
+                controlSystemVolume = false;
+            }
+        }
     }
 
     public void StartVolumePolling()
@@ -82,6 +143,7 @@ public class VolumeManager : MonoBehaviour
     {
         while (autoPollVolume)
         {
+            // Immediate fetch
             yield return GetVolumeCoroutine((success, value, err) => {
                 if (success)
                 {
@@ -89,11 +151,13 @@ public class VolumeManager : MonoBehaviour
                     {
                         Debug.Log($"[VOLUME][POLL] Changed: {lastVolumeValue} -> {value}");
                         lastVolumeValue = value;
+                        currentVolume = value;
                         onVolumeChanged?.Invoke(value);
                     }
                     else
                     {
                         Debug.Log($"[VOLUME][POLL] No change, value: {value}");
+                        currentVolume = value;
                     }
                 }
                 else
@@ -102,6 +166,7 @@ public class VolumeManager : MonoBehaviour
                 }
             });
 
+            // Wait for next tick
             yield return new WaitForSeconds(pollIntervalSeconds);
         }
     }
@@ -142,6 +207,7 @@ public class VolumeManager : MonoBehaviour
                 {
                     var response = JsonUtility.FromJson<VolumeResponse>(req.downloadHandler.text);
                     Debug.Log($"[VOLUME][GET] Success: {response.volume}");
+                    currentVolume = response.volume;
                     callback?.Invoke(true, response.volume, null);
                 }
                 catch (Exception ex)
@@ -202,6 +268,8 @@ public class VolumeManager : MonoBehaviour
             if (req.result == UnityWebRequest.Result.Success)
             {
                 Debug.Log($"[VOLUME][POST] Success! Set to {value}");
+                currentVolume = value;
+                onVolumeChanged?.Invoke(value);
                 callback?.Invoke(true, null);
             }
             else
@@ -227,18 +295,62 @@ public class VolumeManager : MonoBehaviour
     }
 
     // ======================
-    // Apply to Device (Unity AudioListener)
+    // Apply Volume (Unity + Android System)
     // ======================
-    public void ApplyDeviceVolume(int volume)
+    public void ApplyVolume(int volume)
+    {
+        volume = Mathf.Clamp(volume, 0, 100);
+
+        // Apply to Unity AudioListener
+        if (controlUnityVolume)
+        {
+            ApplyUnityVolume(volume);
+        }
+
+        // Apply to Android system volume
+        if (controlSystemVolume && Application.platform == RuntimePlatform.Android && !Application.isEditor)
+        {
+            ApplyAndroidSystemVolume(volume);
+        }
+    }
+
+    private void ApplyUnityVolume(int volume)
     {
         // Convert 0-100 range to 0-1 range for Unity AudioListener
         float normalizedVolume = Mathf.Clamp01(volume / 100f);
         AudioListener.volume = normalizedVolume;
 
-        Debug.Log($"[VOLUME] Applied to AudioListener: {volume}% (normalized: {normalizedVolume})");
+        Debug.Log($"[VOLUME][UNITY] Applied to AudioListener: {volume}% (normalized: {normalizedVolume})");
 
         // Optional: Also apply to specific AudioSource components if you have them
         ApplyToAudioSources(normalizedVolume);
+    }
+
+    private void ApplyAndroidSystemVolume(int volume)
+    {
+        if (audioManager == null)
+        {
+            Debug.LogError("[VOLUME][ANDROID] AudioManager not initialized");
+            return;
+        }
+
+        try
+        {
+            // Convert 0-100 range to Android system volume range
+            int androidVolume = Mathf.RoundToInt((volume / 100f) * maxSystemVolume);
+            androidVolume = Mathf.Clamp(androidVolume, 0, maxSystemVolume);
+
+            // Set the system volume
+            // Parameters: streamType, index, flags
+            // flags = 0 means no UI feedback, use 1 for showing volume UI
+            audioManager.Call("setStreamVolume", (int)streamType, androidVolume, 0);
+
+            Debug.Log($"[VOLUME][ANDROID] Set system volume: {volume}% -> {androidVolume}/{maxSystemVolume} for stream {streamType}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VOLUME][ANDROID] Failed to set system volume: {ex.Message}");
+        }
     }
 
     private void ApplyToAudioSources(float normalizedVolume)
@@ -252,7 +364,46 @@ public class VolumeManager : MonoBehaviour
 
         if (audioSources.Length > 0)
         {
-            Debug.Log($"[VOLUME] Applied to {audioSources.Length} AudioSource components");
+            Debug.Log($"[VOLUME][UNITY] Applied to {audioSources.Length} AudioSource components");
+        }
+    }
+
+    // ======================
+    // Android System Volume Utilities
+    // ======================
+    public int GetCurrentAndroidSystemVolume()
+    {
+        if (audioManager == null || Application.isEditor)
+            return -1;
+
+        try
+        {
+            int currentAndroidVolume = audioManager.Call<int>("getStreamVolume", (int)streamType);
+            int volumePercentage = Mathf.RoundToInt((currentAndroidVolume / (float)maxSystemVolume) * 100);
+            return volumePercentage;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VOLUME][ANDROID] Failed to get current system volume: {ex.Message}");
+            return -1;
+        }
+    }
+
+    public void ShowAndroidVolumeUI(int volume)
+    {
+        if (audioManager == null || Application.isEditor)
+            return;
+
+        try
+        {
+            int androidVolume = Mathf.RoundToInt((volume / 100f) * maxSystemVolume);
+            // Use flag 1 to show the volume UI
+            audioManager.Call("setStreamVolume", (int)streamType, androidVolume, 1);
+            Debug.Log($"[VOLUME][ANDROID] Set volume with UI: {volume}%");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[VOLUME][ANDROID] Failed to set volume with UI: {ex.Message}");
         }
     }
 
@@ -264,10 +415,17 @@ public class VolumeManager : MonoBehaviour
     {
         GetVolume((success, value, err) => {
             if (success)
-                Debug.Log($"[VOLUME][DEBUG] Volume: {value}");
+                Debug.Log($"[VOLUME][DEBUG] API Volume: {value}");
             else
                 Debug.LogError($"[VOLUME][DEBUG] Failed: {err}");
         });
+
+        // Also get current Android system volume
+        int androidVolume = GetCurrentAndroidSystemVolume();
+        if (androidVolume >= 0)
+        {
+            Debug.Log($"[VOLUME][DEBUG] Current Android System Volume: {androidVolume}%");
+        }
     }
 
     [ContextMenu("Debug Set Volume To 75")]
@@ -301,5 +459,21 @@ public class VolumeManager : MonoBehaviour
             else
                 Debug.LogError($"[VOLUME][DEBUG] Max volume failed: {err}");
         });
+    }
+
+    [ContextMenu("Debug Android Volume With UI")]
+    public void DebugAndroidVolumeWithUI()
+    {
+        ShowAndroidVolumeUI(50);
+    }
+
+    [ContextMenu("Test Direct Android Volume Control")]
+    public void TestDirectAndroidVolumeControl()
+    {
+        Debug.Log("Testing direct Android volume control...");
+        ApplyAndroidSystemVolume(75);
+
+        int currentVol = GetCurrentAndroidSystemVolume();
+        Debug.Log($"Current Android system volume after test: {currentVol}%");
     }
 }
